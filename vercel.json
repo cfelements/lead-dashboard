@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/api/hubspot", "destination": "/api/hubspot" },
+    { "source": "/(.*)", "destination": "/public/index.html" }
+  ]
+}
