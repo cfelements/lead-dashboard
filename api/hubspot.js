@@ -15,7 +15,7 @@ module.exports = async function handler(req, res) {
     do {
       const body = {
         filterGroups: [{ filters: [{ propertyName: 'hubspot_owner_id', operator: 'EQ', value: OWNER_ID }] }],
-        properties: ['dealname', 'dealstage', 'createdate'],
+        properties: ['dealname', 'dealstage', 'createdate', 'closedate'],
         limit: 100,
         ...(after ? { after } : {})
       };
@@ -66,6 +66,16 @@ module.exports = async function handler(req, res) {
 
     // 4. Auswerten
     const byStage = {}, byMonth = {}, byLeadquelle = {}, deals = [];
+    const now = new Date();
+    const thisMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    const lastMonthDate = new Date(now.getFullYear(), now.getMonth()-1, 1);
+    const lastMonth = `${lastMonthDate.getFullYear()}-${String(lastMonthDate.getMonth()+1).padStart(2,'0')}`;
+
+    // Für Ø Abschlussdauer
+    const daysToClose = [];          // alle
+    const daysToCloseThisMonth = []; // nur Abschlüsse diesen Monat
+    const daysToCloseLastMonth = []; // nur Abschlüsse letzten Monat
+
     allDeals.forEach(deal => {
       const p     = deal.properties ?? {};
       const stage = p.dealstage || 'unknown';
@@ -78,11 +88,30 @@ module.exports = async function handler(req, res) {
         const m = p.createdate.substring(0, 7);
         byMonth[m] = (byMonth[m] || 0) + 1;
       }
+
+      // Abschlussdauer für Closed Won
+      if (stage === 'closedwon' && p.createdate && p.closedate) {
+        const days = Math.round((new Date(p.closedate) - new Date(p.createdate)) / 86400000);
+        if (days >= 0) {
+          daysToClose.push(days);
+          const closeMonth = p.closedate.substring(0, 7);
+          if (closeMonth === thisMonth) daysToCloseThisMonth.push(days);
+          if (closeMonth === lastMonth) daysToCloseLastMonth.push(days);
+        }
+      }
+
       deals.push({ name: p.dealname || '—', stage, leadquelle: lq, createdate: p.createdate || null });
     });
 
+    const avg = arr => arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null;
+    const avgDays = {
+      all:       avg(daysToClose),
+      thisMonth: avg(daysToCloseThisMonth),
+      lastMonth: avg(daysToCloseLastMonth),
+    };
+
     res.setHeader('Cache-Control', 's-maxage=60');
-    res.json({ byStage, byMonth, byLeadquelle, deals, total: allDeals.length });
+    res.json({ byStage, byMonth, byLeadquelle, deals, total: allDeals.length, avgDays });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
