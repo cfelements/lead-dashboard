@@ -15,7 +15,7 @@ module.exports = async function handler(req, res) {
     do {
       const body = {
         filterGroups: [{ filters: [{ propertyName: 'hubspot_owner_id', operator: 'EQ', value: OWNER_ID }] }],
-        properties: ['dealname', 'dealstage', 'createdate', 'closedate'],
+        properties: ['dealname', 'dealstage', 'createdate', 'closedate', 'hs_closed_lost_reason'],
         limit: 100,
         ...(after ? { after } : {})
       };
@@ -30,7 +30,22 @@ module.exports = async function handler(req, res) {
 
     const dealIds = allDeals.map(d => d.id);
 
-    // 2. Deal → Kontakt Associations (v4)
+    // 2. Deal → Notizen: prüfen ob Notizen vorhanden (v4)
+    const hasNoteSet = new Set();
+    for (let i = 0; i < dealIds.length; i += CHUNK) {
+      const chunk = dealIds.slice(i, i + CHUNK);
+      const r = await fetch('https://api.hubapi.com/crm/v4/associations/deals/notes/batch/read', {
+        method: 'POST', headers: h,
+        body: JSON.stringify({ inputs: chunk.map(id => ({ id })) })
+      });
+      if (!r.ok) continue;
+      const d = await r.json();
+      (d.results || []).forEach(item => {
+        if (item.to && item.to.length > 0) hasNoteSet.add(item.from.id);
+      });
+    }
+
+    // 3. Deal → Kontakt Associations (v4)
     const contactIdMap = {};
     const CHUNK = 100;
     for (let i = 0; i < dealIds.length; i += CHUNK) {
@@ -47,7 +62,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // 3. Kontakte batch-lesen → leadquelle
+    // 4. Kontakte batch-lesen → leadquelle
     const contactIds = [...new Set(Object.values(contactIdMap))];
     const leadquelleMap = {};
     for (let i = 0; i < contactIds.length; i += CHUNK) {
@@ -64,7 +79,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // 4. Auswerten
+    // 5. Auswerten
     const byStage = {}, byMonth = {}, byLeadquelle = {}, deals = [];
     const now = new Date();
     const thisMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
@@ -100,7 +115,14 @@ module.exports = async function handler(req, res) {
         }
       }
 
-      deals.push({ name: p.dealname || '—', stage, leadquelle: lq, createdate: p.createdate || null });
+      deals.push({
+        name:       p.dealname || '—',
+        stage,
+        leadquelle: lq,
+        createdate: p.createdate || null,
+        lostReason: p.hs_closed_lost_reason || null,
+        hasNote:    hasNoteSet.has(deal.id),
+      });
     });
 
     const avg = arr => arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null;
