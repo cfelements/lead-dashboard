@@ -29,6 +29,7 @@ module.exports = async function handler(req, res) {
     } while (after);
 
     const dealIds = allDeals.map(d => d.id);
+    const CHUNK = 100;
 
     // 2. Deal → Notizen: prüfen ob Notizen vorhanden (v4)
     const hasNoteSet = new Set();
@@ -51,7 +52,6 @@ module.exports = async function handler(req, res) {
 
     // 3. Deal → Kontakt Associations (v4)
     const contactIdMap = {};
-    const CHUNK = 100;
     for (let i = 0; i < dealIds.length; i += CHUNK) {
       const chunk = dealIds.slice(i, i + CHUNK);
       const r = await fetch('https://api.hubapi.com/crm/v4/associations/deals/contacts/batch/read', {
