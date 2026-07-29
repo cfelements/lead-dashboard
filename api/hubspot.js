@@ -15,7 +15,7 @@ module.exports = async function handler(req, res) {
     do {
       const body = {
         filterGroups: [{ filters: [{ propertyName: 'hubspot_owner_id', operator: 'EQ', value: OWNER_ID }] }],
-        properties: ['dealname', 'dealstage', 'createdate', 'closedate', 'hs_closed_lost_reason'],
+        properties: ['dealname', 'dealstage', 'createdate', 'closedate', 'hs_closed_lost_reason', 'closed_lost_reason'],
         limit: 100,
         ...(after ? { after } : {})
       };
@@ -124,7 +124,7 @@ module.exports = async function handler(req, res) {
         stage,
         leadquelle: lq,
         createdate: p.createdate || null,
-        lostReason: p.hs_closed_lost_reason || null,
+        lostReason: p.hs_closed_lost_reason || p.closed_lost_reason || null,
         hasNote:    hasNoteSet.has(String(deal.id)),
       });
     });
