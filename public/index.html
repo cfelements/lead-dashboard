@@ -676,9 +676,9 @@
 
   function renderTable() {
     const q = (document.getElementById('search').value || '').toLowerCase();
-    const filtered = allDeals.filter(d =>
-      (d.name || '').toLowerCase().includes(q) || (d.leadquelle || '').toLowerCase().includes(q)
-    );
+    const filtered = allDeals
+      .filter(d => (d.name || '').toLowerCase().includes(q) || (d.leadquelle || '').toLowerCase().includes(q))
+      .sort((a, b) => (b.createdate || '').localeCompare(a.createdate || ''));
     const pages = Math.ceil(filtered.length / PAGE_SIZE) || 1;
     currentPage = Math.min(currentPage, pages);
     const slice = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
