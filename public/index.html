@@ -431,7 +431,7 @@
     </div>
   </div>
   <table>
-    <thead><tr><th>Name</th><th>Leadquelle</th><th>Status</th><th>Erstellt</th></tr></thead>
+    <thead><tr><th>Name</th><th>Leadquelle</th><th>Status</th><th>Erstellt</th><th>Notiz</th><th>Verlustgrund</th></tr></thead>
     <tbody id="tableBody"></tbody>
   </table>
   <div class="pagination">
@@ -686,11 +686,19 @@
       ? slice.map(d => {
           const c = stageCfg(d.stage), lqc = lqColor(d.leadquelle);
           const date = d.createdate ? new Date(d.createdate).toLocaleDateString('de-DE') : '—';
+          const noteCell = d.hasNote
+            ? `<span title="Hat Notizen" style="color:#10b981;font-size:16px">📝</span>`
+            : `<span style="color:#334155;font-size:13px">—</span>`;
+          const lostCell = d.lostReason
+            ? `<span class="badge" style="background:rgba(239,68,68,.1);color:#fca5a5;border-color:rgba(239,68,68,.2);max-width:180px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${d.lostReason}">${d.lostReason}</span>`
+            : `<span style="color:#334155;font-size:13px">—</span>`;
           return `<tr>
             <td style="font-weight:600">${d.name}</td>
             <td><span class="badge" style="background:${lqc}18;color:${lqc};border-color:${lqc}33">${d.leadquelle}</span></td>
             <td><span class="badge" style="background:${c.color}18;color:${c.color};border-color:${c.color}33">${c.label}</span></td>
-            <td style="color:var(--sub)">${date}</td></tr>`;
+            <td style="color:var(--sub)">${date}</td>
+            <td style="text-align:center">${noteCell}</td>
+            <td>${lostCell}</td></tr>`;
         }).join('')
       : '<tr><td colspan="4" class="msg">Keine Ergebnisse</td></tr>';
     document.getElementById('pageInfo').textContent = `${filtered.length} Einträge · Seite ${currentPage} von ${pages}`;
