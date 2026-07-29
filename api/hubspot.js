@@ -32,17 +32,21 @@ module.exports = async function handler(req, res) {
 
     // 2. Deal → Notizen: prüfen ob Notizen vorhanden (v4)
     const hasNoteSet = new Set();
-    for (let i = 0; i < dealIds.length; i += CHUNK) {
-      const chunk = dealIds.slice(i, i + CHUNK);
-      const r = await fetch('https://api.hubapi.com/crm/v4/associations/deals/notes/batch/read', {
-        method: 'POST', headers: h,
-        body: JSON.stringify({ inputs: chunk.map(id => ({ id })) })
-      });
-      if (!r.ok) continue;
-      const d = await r.json();
-      (d.results || []).forEach(item => {
-        if (item.to && item.to.length > 0) hasNoteSet.add(item.from.id);
-      });
+    try {
+      for (let i = 0; i < dealIds.length; i += CHUNK) {
+        const chunk = dealIds.slice(i, i + CHUNK);
+        const r = await fetch('https://api.hubapi.com/crm/v4/associations/deals/notes/batch/read', {
+          method: 'POST', headers: h,
+          body: JSON.stringify({ inputs: chunk.map(id => ({ id })) })
+        });
+        if (!r.ok) continue;
+        const d = await r.json();
+        (d.results || []).forEach(item => {
+          if (item.to && item.to.length > 0) hasNoteSet.add(String(item.from.id));
+        });
+      }
+    } catch (e) {
+      // Notizen-Abruf fehlgeschlagen – weiter ohne Notizen-Info
     }
 
     // 3. Deal → Kontakt Associations (v4)
@@ -121,7 +125,7 @@ module.exports = async function handler(req, res) {
         leadquelle: lq,
         createdate: p.createdate || null,
         lostReason: p.hs_closed_lost_reason || null,
-        hasNote:    hasNoteSet.has(deal.id),
+        hasNote:    hasNoteSet.has(String(deal.id)),
       });
     });
 
