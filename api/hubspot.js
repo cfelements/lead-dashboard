@@ -6,6 +6,45 @@ module.exports = async function handler(req, res) {
 
   const h = { 'Authorization': `Bearer ${API_KEY}`, 'Content-Type': 'application/json' };
 
+  /* Notizen werden erst beim Klick geladen, nicht beim Seitenaufbau */
+  const dealId = req.query?.dealId;
+  if (dealId) {
+    try {
+      if (!/^\d+$/.test(String(dealId))) throw new Error('Ung\u00fcltige Deal-ID');
+
+      const aRes = await fetch(`https://api.hubapi.com/crm/v4/objects/deals/${dealId}/associations/notes?limit=100`, { headers: h });
+      if (!aRes.ok) throw new Error(`Associations API: ${aRes.status}`);
+      const aData = await aRes.json();
+      const noteIds = [...new Set((aData.results || []).map(r => String(r.toObjectId)))];
+      if (!noteIds.length) return res.json({ notes: [] });
+
+      const notes = [];
+      for (let i = 0; i < noteIds.length; i += 100) {
+        const r = await fetch('https://api.hubapi.com/crm/v3/objects/notes/batch/read', {
+          method: 'POST', headers: h,
+          body: JSON.stringify({
+            inputs: noteIds.slice(i, i + 100).map(id => ({ id })),
+            properties: ['hs_note_body', 'hs_timestamp', 'hubspot_owner_id'],
+          })
+        });
+        if (!r.ok) continue;
+        const d = await r.json();
+        (d.results || []).forEach(n => notes.push({
+          id: n.id,
+          body: (n.properties?.hs_note_body || '').slice(0, 60000),
+          ts: n.properties?.hs_timestamp || n.createdAt || null,
+          ownerId: n.properties?.hubspot_owner_id ? String(n.properties.hubspot_owner_id) : null,
+        }));
+      }
+
+      notes.sort((a, b) => new Date(b.ts || 0) - new Date(a.ts || 0));
+      res.setHeader('Cache-Control', 's-maxage=30');
+      return res.json({ notes });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   try {
     // 1. Alle Deals laden (portalweit, nicht mehr auf einen Owner gefiltert)
     let allDeals = [];
@@ -54,8 +93,8 @@ module.exports = async function handler(req, res) {
       // Owner-Abruf fehlgeschlagen (fehlende Scope?) - Namen fallen auf IDs zurueck
     }
 
-    // 3. Deal -> Notizen: pruefen ob Notizen vorhanden (v4)
-    const hasNoteSet = new Set();
+    // 3. Deal -> Notizen: Anzahl ermitteln (Texte werden erst bei Bedarf geladen)
+    const noteCountMap = {};
     try {
       for (let i = 0; i < dealIds.length; i += CHUNK) {
         const chunk = dealIds.slice(i, i + CHUNK);
@@ -66,7 +105,8 @@ module.exports = async function handler(req, res) {
         if (!r.ok) continue;
         const d = await r.json();
         (d.results || []).forEach(item => {
-          if (item.to && item.to.length > 0) hasNoteSet.add(String(item.from.id));
+          const n = item.to ? item.to.length : 0;
+          if (n > 0) noteCountMap[String(item.from.id)] = n;
         });
       }
     } catch (e) {
@@ -129,7 +169,10 @@ module.exports = async function handler(req, res) {
       }
       ownersSeen[oId].count++;
 
+      const nCount = noteCountMap[String(deal.id)] || 0;
+
       return {
+        id:         String(deal.id),
         name:       p.dealname || '\u2014',
         stage:      p.dealstage || 'unknown',
         leadquelle: lq,
@@ -138,7 +181,8 @@ module.exports = async function handler(req, res) {
         createdate: p.createdate || null,
         closedate:  p.closedate  || null,
         lostReason: p.hs_closed_lost_reason || p.closed_lost_reason || null,
-        hasNote:    hasNoteSet.has(String(deal.id)),
+        noteCount:  nCount,
+        hasNote:    nCount > 0,
       };
     });
 
