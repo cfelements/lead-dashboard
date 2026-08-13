@@ -141,6 +141,15 @@
     .wl-stat-value { font-size: 24px; font-weight: 600; letter-spacing: -.02em; line-height: 1.3; }
     .wl-stat-sub { font-size: 10px; color: var(--muted); }
     .wl-wrap { position: relative; height: 250px; }
+    .wl-toggle { display: inline-flex; border: 1px solid var(--line); overflow: hidden; }
+    .wl-toggle button {
+      background: var(--card); border: none; border-right: 1px solid var(--line);
+      padding: 7px 13px; font-size: 11px; font-weight: 500; color: var(--muted);
+      font-family: inherit; cursor: pointer; transition: background .18s, color .18s;
+    }
+    .wl-toggle button:last-child { border-right: none; }
+    .wl-toggle button:hover { background: #fafafb; }
+    .wl-toggle button.on { background: var(--amber); color: var(--ink); font-weight: 600; }
     .wl-hint { font-size: 10px; color: var(--muted); margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
 
     /* ─────────── Pipeline ─────────── */
@@ -301,7 +310,13 @@
 
   <div class="card">
     <div class="wl-head">
-      <div class="section-title" style="margin:0"><div class="pip"></div>Gewinn &amp; Verlust pro Monat</div>
+      <div>
+        <div class="section-title" style="margin:0 0 10px"><div class="pip"></div>Gewinn &amp; Verlust pro Monat</div>
+        <div class="wl-toggle">
+          <button id="wlBtnCreate" class="on" onclick="setWlMode('create')">Nach Entstehungsmonat</button>
+          <button id="wlBtnClose" onclick="setWlMode('close')">Nach Abschlussmonat</button>
+        </div>
+      </div>
       <div class="wl-stats">
         <div class="wl-stat">
           <div class="wl-stat-label">Laufender Monat</div>
@@ -408,6 +423,8 @@
 
   let mC, dC, lqC, wlC, allDeals = [], lqKeys = [], currentPage = 1;
   let rawDeals = [], owners = [], currentOwner = 'all';
+  let wlMode = 'create';   // 'create' = Entstehungsmonat (Kohorte), 'close' = Abschlussmonat
+  let lastStats = null;
   const MY_OWNER_ID = '90396933';   // Calvin - bekommt ein "DU"-Badge in der Team-Tabelle
   const OWNER_COLORS = ['#1a1a1f','#fcb618','#2e9e6b','#d99a08','#7a7a85','#c17f3a','#4a7dbf'];
   const ownerColor = id => id === '__none__' ? '#c9c9d0'
@@ -488,8 +505,8 @@
 
   /* ── Kennzahlen aus der (gefilterten) Deal-Liste berechnen ── */
   function aggregate(deals) {
-    const byStage = {}, byMonth = {}, byLeadquelle = {}, byCloseMonth = {};
-    let closedOhneDatum = 0;
+    const byStage = {}, byMonth = {}, byLeadquelle = {}, byCloseMonth = {}, byCreateMonth = {};
+    let closedOhneDatum = 0, createOhneDatum = 0;
     const daysToClose = [];
 
     deals.forEach(d => {
@@ -502,7 +519,10 @@
         byMonth[m] = (byMonth[m] || 0) + 1;
       }
 
-      if (d.stage === 'closedwon' || d.stage === 'closedlost') {
+      const decided = d.stage === 'closedwon' || d.stage === 'closedlost';
+
+      /* Variante A: Zuordnung nach Abschlussdatum */
+      if (decided) {
         if (d.closedate) {
           const cm = d.closedate.substring(0, 7);
           if (!byCloseMonth[cm]) byCloseMonth[cm] = { won: 0, lost: 0 };
@@ -510,6 +530,17 @@
         } else {
           closedOhneDatum++;
         }
+      }
+
+      /* Variante B: Zuordnung nach Entstehungsmonat (Kohorte) - inkl. noch offener Deals */
+      if (d.createdate) {
+        const em = d.createdate.substring(0, 7);
+        if (!byCreateMonth[em]) byCreateMonth[em] = { won: 0, lost: 0, open: 0 };
+        if (d.stage === 'closedwon')       byCreateMonth[em].won++;
+        else if (d.stage === 'closedlost') byCreateMonth[em].lost++;
+        else                               byCreateMonth[em].open++;
+      } else if (decided) {
+        createOhneDatum++;
       }
 
       if (d.stage === 'closedwon' && d.createdate && d.closedate) {
@@ -521,10 +552,13 @@
     const avgDays = daysToClose.length
       ? Math.round(daysToClose.reduce((a, b) => a + b, 0) / daysToClose.length) : null;
 
-    return { byStage, byMonth, byCloseMonth, closedOhneDatum, byLeadquelle, total: deals.length, avgDays };
+    return { byStage, byMonth, byCloseMonth, byCreateMonth, closedOhneDatum, createOhneDatum,
+             byLeadquelle, total: deals.length, avgDays };
   }
 
-  function render({ byStage, byMonth, byCloseMonth, closedOhneDatum, byLeadquelle, total, avgDays }) {
+  function render(stats) {
+    lastStats = stats;
+    const { byStage, byMonth, byLeadquelle, total, avgDays } = stats;
     const won    = byStage['closedwon']    || 0;
     const lost   = byStage['closedlost']   || 0;
     const offers = byStage['contractsent'] || 0;
@@ -671,7 +705,7 @@
       }, 500 + idx * 80);
     });
 
-    renderWinLoss(byCloseMonth || {}, closedOhneDatum || 0);
+    renderWinLoss();
     renderTeam();
 
     currentPage = 1;
@@ -719,9 +753,27 @@
     });
   }
 
-  /* ── Gewinn/Verlust pro Abschlussmonat ── */
-  function renderWinLoss(byCloseMonth, ohneDatum) {
-    const keys = Object.keys(byCloseMonth).sort();
+  /* ── Gewinn/Verlust pro Monat ──
+     'create' = Deal zählt in den Monat, in dem er angelegt wurde (Kohorte)
+     'close'  = Deal zählt in den Monat, in dem er gewonnen/verloren wurde        */
+  function setWlMode(mode) {
+    wlMode = mode;
+    document.getElementById('wlBtnCreate').classList.toggle('on', mode === 'create');
+    document.getElementById('wlBtnClose').classList.toggle('on',  mode === 'close');
+    renderWinLoss();
+  }
+
+  function renderWinLoss() {
+    if (!lastStats) return;
+    const byCreate  = lastStats.byCreateMonth || {};
+    const byClose   = lastStats.byCloseMonth  || {};
+    const cohort    = wlMode === 'create';
+    const source    = cohort ? byCreate : byClose;
+    const ohneDatum = cohort ? (lastStats.createOhneDatum || 0) : (lastStats.closedOhneDatum || 0);
+    const keys = Object.keys(source).sort();
+    document.querySelectorAll('.wl-stat-label')[0].textContent = cohort ? 'Laufender Jahrgang' : 'Laufender Monat';
+    document.querySelectorAll('.wl-stat-label')[1].textContent = cohort ? 'Vormonats-Jahrgang' : 'Vormonat';
+
     const setStat = (id, subId, q, won, lost) => {
       const el = document.getElementById(id);
       if (q === null) {
@@ -753,8 +805,9 @@
       cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
     }
 
-    const wonArr  = months.map(m => byCloseMonth[m]?.won  || 0);
-    const lostArr = months.map(m => byCloseMonth[m]?.lost || 0);
+    const wonArr  = months.map(m => source[m]?.won  || 0);
+    const lostArr = months.map(m => source[m]?.lost || 0);
+    const openArr = months.map(m => source[m]?.open || 0);
     const rateArr = months.map((m, i) => {
       const dec = wonArr[i] + lostArr[i];
       return dec > 0 ? Math.round(wonArr[i] / dec * 100) : null;
@@ -772,9 +825,11 @@
     const l6 = lostArr.slice(from).reduce((a, b) => a + b, 0);
     setStat('wl-avg', 'wl-avg-sub', (w6 + l6) > 0 ? Math.round(w6 / (w6 + l6) * 100) : null, w6, l6);
 
-    document.getElementById('wl-hint').textContent =
-      'Zuordnung nach Abschlussdatum (closedate), nicht nach Eingangsmonat des Leads.'
-      + (ohneDatum > 0 ? ` · ${ohneDatum} entschiedene Deal(s) ohne Abschlussdatum sind nicht enthalten.` : '');
+    document.getElementById('wl-hint').textContent = cohort
+      ? 'Zuordnung nach Entstehungsmonat: Jeder Deal zählt in den Monat, in dem er angelegt wurde — unabhängig davon, wann er gewonnen oder verloren wurde. Die Quote der jüngsten Monate ist noch nicht belastbar, solange dort viele Deals offen sind.'
+        + (ohneDatum > 0 ? ` · ${ohneDatum} entschiedene Deal(s) ohne Anlagedatum sind nicht enthalten.` : '')
+      : 'Zuordnung nach Abschlussdatum: Jeder Deal zählt in den Monat, in dem er auf gewonnen oder verloren gesetzt wurde.'
+        + (ohneDatum > 0 ? ` · ${ohneDatum} entschiedene Deal(s) ohne Abschlussdatum sind nicht enthalten.` : '');
 
     const labels = months.map(m => new Date(m + '-01').toLocaleDateString('de-DE', { month: 'short', year: '2-digit' }));
 
@@ -793,6 +848,11 @@
             backgroundColor: '#eab8b8', hoverBackgroundColor: C.red,
             borderRadius: 2, borderSkipped: false, stack: 'wl', order: 2, maxBarThickness: 40,
           },
+          ...(cohort ? [{
+            type: 'bar', label: 'Noch offen', data: openArr, yAxisID: 'y',
+            backgroundColor: '#e4e4e9', hoverBackgroundColor: C.greyLight,
+            borderRadius: 2, borderSkipped: false, stack: 'wl', order: 2, maxBarThickness: 40,
+          }] : []),
           {
             type: 'line', label: 'Gewinnquote', data: rateArr, yAxisID: 'y1',
             borderColor: C.ink, backgroundColor: C.ink,
@@ -817,7 +877,9 @@
                 : `${ctx.dataset.label}: ${ctx.parsed.y}`,
               afterBody: items => {
                 const i = items[0].dataIndex, dec = wonArr[i] + lostArr[i];
-                return dec > 0 ? `Entschieden: ${dec}` : '';
+                if (!cohort) return dec > 0 ? `Entschieden: ${dec}` : '';
+                const ges = dec + openArr[i];
+                return ges > 0 ? `Leads gesamt: ${ges} · entschieden: ${dec}` : '';
               }
             }
           }
