@@ -125,6 +125,43 @@
     .refresh-btn:hover::before { transform:translateX(200%); }
 
     /* ═══════════════════════════════════════════
+       OWNER FILTER
+    ═══════════════════════════════════════════ */
+    .owner-filter { display:flex; align-items:center; gap:10px; }
+    .owner-filter label {
+      font-size:10px; font-weight:700; color:var(--sub);
+      text-transform:uppercase; letter-spacing:.12em;
+    }
+    .owner-select {
+      background:rgba(255,255,255,.04); border:1px solid var(--border);
+      border-radius:10px; padding:9px 34px 9px 13px;
+      font-size:13px; font-weight:600; color:var(--text);
+      font-family:inherit; cursor:pointer; outline:none;
+      min-width:210px; transition:all .25s;
+      appearance:none;
+      background-image:linear-gradient(45deg,transparent 50%,#64748b 50%),linear-gradient(135deg,#64748b 50%,transparent 50%);
+      background-position:calc(100% - 17px) calc(50% + 1px), calc(100% - 12px) calc(50% + 1px);
+      background-size:5px 5px, 5px 5px;
+      background-repeat:no-repeat;
+    }
+    .owner-select:hover  { border-color:rgba(59,130,246,.4); background-color:rgba(59,130,246,.06); }
+    .owner-select:focus  { border-color:var(--blue); box-shadow:0 0 0 3px rgba(59,130,246,.12); }
+    .owner-select option { background:#0a1226; color:var(--text); }
+
+    .filter-pill {
+      display:none; align-items:center; gap:7px;
+      background:rgba(59,130,246,.1); border:1px solid rgba(59,130,246,.25);
+      border-radius:20px; padding:5px 12px;
+      font-size:11px; font-weight:700; color:#93c5fd;
+    }
+    .filter-pill.on { display:inline-flex; }
+    .filter-pill button {
+      background:none; border:none; color:#93c5fd; cursor:pointer;
+      font-size:14px; line-height:1; padding:0; font-family:inherit; opacity:.7;
+    }
+    .filter-pill button:hover { opacity:1; }
+
+    /* ═══════════════════════════════════════════
        KPI CARDS
     ════════════════════════════════════════════ */
     .kpi-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:14px; margin-bottom:18px; }
@@ -207,9 +244,28 @@
     .chart-wrap { position:relative; height:190px; }
 
     /* ═══════════════════════════════════════════
+       WIN/LOSS CARD
+    ═══════════════════════════════════════════ */
+    .wl-card {
+      padding:20px 22px; border-radius:20px;
+      background:var(--card); border:1px solid var(--border);
+      backdrop-filter:blur(20px); margin-bottom:18px;
+      position:relative; overflow:hidden;
+      animation:cardRise .7s cubic-bezier(.16,1,.3,1) .30s both;
+    }
+    .wl-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:12px; }
+    .wl-stats { display:flex; gap:22px; }
+    .wl-stat { text-align:right; }
+    .wl-stat-label { font-size:9px; font-weight:700; color:var(--sub); text-transform:uppercase; letter-spacing:.12em; }
+    .wl-stat-value { font-size:22px; font-weight:900; letter-spacing:-1px; line-height:1.2; }
+    .wl-stat-sub { font-size:10px; color:var(--sub); }
+    .wl-wrap { position:relative; height:240px; }
+    .wl-hint { font-size:10px; color:var(--sub); margin-top:12px; }
+
+    /* ═══════════════════════════════════════════
        PIPELINE BARS
     ════════════════════════════════════════════ */
-    .pipeline-card, .lq-card, .list-card {
+    .pipeline-card, .lq-card, .team-card, .list-card {
       padding:20px 22px; border-radius:20px;
       background:var(--card); border:1px solid var(--border);
       backdrop-filter:blur(20px); margin-bottom:18px;
@@ -217,6 +273,10 @@
     }
     .pipeline-card { animation:cardRise .7s cubic-bezier(.16,1,.3,1) .32s both; }
     .lq-card       { animation:cardRise .7s cubic-bezier(.16,1,.3,1) .36s both; }
+    .team-card     { animation:cardRise .7s cubic-bezier(.16,1,.3,1) .38s both; }
+    .team-me       { font-size:9px; font-weight:800; color:var(--blue); letter-spacing:.1em;
+                     background:rgba(59,130,246,.12); border-radius:6px; padding:2px 6px; margin-left:8px; }
+    .row-click     { cursor:pointer; }
     .list-card     { animation:cardRise .7s cubic-bezier(.16,1,.3,1) .40s both; }
 
     .pr { display:flex; align-items:center; gap:10px; margin-bottom:9px; }
@@ -348,7 +408,19 @@
       <div class="subtitle" id="ts">Verbinde mit HubSpot...</div>
     </div>
   </div>
-  <button class="refresh-btn" onclick="load()">↻ &nbsp;Aktualisieren</button>
+  <div style="display:flex;align-items:center;gap:14px;">
+    <div class="filter-pill" id="filterPill">
+      <span id="filterPillText"></span>
+      <button onclick="setOwner('all')" title="Filter aufheben">×</button>
+    </div>
+    <div class="owner-filter">
+      <label for="ownerSelect">Mitarbeiter</label>
+      <select class="owner-select" id="ownerSelect" onchange="setOwner(this.value)">
+        <option value="all">Alle Mitarbeiter</option>
+      </select>
+    </div>
+    <button class="refresh-btn" onclick="load()">↻ &nbsp;Aktualisieren</button>
+  </div>
 </div>
 
 <!-- ── KPIs ── -->
@@ -406,6 +478,32 @@
   </div>
 </div>
 
+<!-- ── Gewinn / Verlust pro Monat ── -->
+<div class="wl-card">
+  <div class="wl-head">
+    <div class="section-title" style="margin:0"><div class="pip" style="background:#10b981;box-shadow:0 0 8px #10b981"></div>Gewinn &amp; Verlust pro Monat</div>
+    <div class="wl-stats">
+      <div class="wl-stat">
+        <div class="wl-stat-label">Laufender Monat</div>
+        <div class="wl-stat-value" id="wl-cur">—</div>
+        <div class="wl-stat-sub" id="wl-cur-sub">—</div>
+      </div>
+      <div class="wl-stat">
+        <div class="wl-stat-label">Vormonat</div>
+        <div class="wl-stat-value" id="wl-prev">—</div>
+        <div class="wl-stat-sub" id="wl-prev-sub">—</div>
+      </div>
+      <div class="wl-stat">
+        <div class="wl-stat-label">Ø letzte 6 Monate</div>
+        <div class="wl-stat-value" id="wl-avg">—</div>
+        <div class="wl-stat-sub" id="wl-avg-sub">—</div>
+      </div>
+    </div>
+  </div>
+  <div class="wl-wrap"><canvas id="cWinLoss"></canvas></div>
+  <div class="wl-hint" id="wl-hint"></div>
+</div>
+
 <!-- ── Pipeline ── -->
 <div class="pipeline-card">
   <div class="section-title"><div class="pip" style="background:#f59e0b;box-shadow:0 0 8px #f59e0b"></div>Pipeline-Übersicht</div>
@@ -421,6 +519,15 @@
   </table>
 </div>
 
+<!-- ── Mitarbeiter-Übersicht ── -->
+<div class="team-card" id="teamCard">
+  <div class="section-title"><div class="pip" style="background:#8b5cf6;box-shadow:0 0 8px #8b5cf6"></div>Mitarbeiter-Übersicht</div>
+  <table class="lq-table">
+    <thead><tr><th>Mitarbeiter</th><th>Leads</th><th>Offen</th><th>Gewonnen</th><th>Verloren</th><th>Quote</th></tr></thead>
+    <tbody id="teamBody"><tr><td colspan="6" class="msg">Lade...</td></tr></tbody>
+  </table>
+</div>
+
 <!-- ── Kundenliste ── -->
 <div class="list-card">
   <div class="list-header">
@@ -431,7 +538,7 @@
     </div>
   </div>
   <table>
-    <thead><tr><th>Name</th><th>Leadquelle</th><th>Status</th><th>Erstellt</th><th>Notiz</th><th>Verlustgrund</th></tr></thead>
+    <thead><tr><th>Name</th><th>Mitarbeiter</th><th>Leadquelle</th><th>Status</th><th>Erstellt</th><th>Notiz</th><th>Verlustgrund</th></tr></thead>
     <tbody id="tableBody"></tbody>
   </table>
   <div class="pagination">
@@ -475,7 +582,12 @@
   const LQ_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#06b6d4','#8b5cf6','#f97316'];
   const stageCfg = k => STAGES.find(s => k === s.key) ?? { label: k, color: '#475569' };
 
-  let mC, dC, lqC, allDeals = [], lqKeys = [], currentPage = 1;
+  let mC, dC, lqC, wlC, allDeals = [], lqKeys = [], currentPage = 1;
+  let rawDeals = [], owners = [], currentOwner = 'all';
+  const MY_OWNER_ID = '90396933';   // Calvin - bekommt ein "DU"-Badge in der Team-Tabelle
+  const OWNER_COLORS = ['#3b82f6','#8b5cf6','#06b6d4','#f97316','#10b981','#f59e0b','#ec4899'];
+  const ownerColor = id => id === '__none__' ? '#475569'
+    : OWNER_COLORS[Math.max(0, owners.findIndex(o => o.id === id)) % OWNER_COLORS.length];
   const PAGE_SIZE = 20;
   const lqColor = lq => LQ_COLORS[lqKeys.indexOf(lq) % LQ_COLORS.length] || '#475569';
 
@@ -503,16 +615,87 @@
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      allDeals = data.deals || [];
-      lqKeys = Object.keys(data.byLeadquelle || {}).sort();
-      render(data);
+      rawDeals = data.deals || [];
+      owners   = data.owners || [];
+      lqKeys   = [...new Set(rawDeals.map(d => d.leadquelle || 'Unbekannt'))].sort();
+      buildOwnerSelect();
+      apply();
     } catch (e) {
       document.getElementById('pipeline').innerHTML = `<div class="err">Fehler: ${e.message}</div>`;
       document.getElementById('ts').textContent = 'Fehler beim Laden';
     }
   }
 
-  function render({ byStage, byMonth, byLeadquelle, total, avgDays }) {
+  /* ── Mitarbeiter-Filter ── */
+  function buildOwnerSelect() {
+    const sel = document.getElementById('ownerSelect');
+    if (!owners.some(o => o.id === currentOwner)) currentOwner = 'all';
+    sel.innerHTML = `<option value="all">Alle Mitarbeiter (${rawDeals.length})</option>`
+      + owners.map(o => `<option value="${o.id}">${o.name}${o.archived ? ' (inaktiv)' : ''} (${o.count})</option>`).join('');
+    sel.value = currentOwner;
+    document.getElementById('teamCard').style.display = owners.length > 1 ? '' : 'none';
+  }
+
+  function setOwner(id) {
+    currentOwner = id;
+    document.getElementById('ownerSelect').value = id;
+    apply();
+  }
+
+  function apply() {
+    allDeals = currentOwner === 'all' ? rawDeals : rawDeals.filter(d => d.ownerId === currentOwner);
+
+    const pill = document.getElementById('filterPill');
+    if (currentOwner === 'all') {
+      pill.classList.remove('on');
+    } else {
+      pill.classList.add('on');
+      const o = owners.find(x => x.id === currentOwner);
+      document.getElementById('filterPillText').textContent = `Gefiltert: ${o ? o.name : currentOwner}`;
+    }
+
+    render(aggregate(allDeals));
+  }
+
+  /* ── Kennzahlen aus der (gefilterten) Deal-Liste berechnen ── */
+  function aggregate(deals) {
+    const byStage = {}, byMonth = {}, byLeadquelle = {}, byCloseMonth = {};
+    let closedOhneDatum = 0;
+    const daysToClose = [];
+
+    deals.forEach(d => {
+      byStage[d.stage] = (byStage[d.stage] || 0) + 1;
+      const lq = d.leadquelle || 'Unbekannt';
+      byLeadquelle[lq] = (byLeadquelle[lq] || 0) + 1;
+
+      if (d.createdate) {
+        const m = d.createdate.substring(0, 7);
+        byMonth[m] = (byMonth[m] || 0) + 1;
+      }
+
+      if (d.stage === 'closedwon' || d.stage === 'closedlost') {
+        if (d.closedate) {
+          const cm = d.closedate.substring(0, 7);
+          if (!byCloseMonth[cm]) byCloseMonth[cm] = { won: 0, lost: 0 };
+          if (d.stage === 'closedwon') byCloseMonth[cm].won++; else byCloseMonth[cm].lost++;
+        } else {
+          closedOhneDatum++;
+        }
+      }
+
+      if (d.stage === 'closedwon' && d.createdate && d.closedate) {
+        const days = Math.round((new Date(d.closedate) - new Date(d.createdate)) / 86400000);
+        if (days >= 0) daysToClose.push(days);
+      }
+    });
+
+    const avgDays = daysToClose.length
+      ? Math.round(daysToClose.reduce((a, b) => a + b, 0) / daysToClose.length) : null;
+
+    return { byStage, byMonth, byCloseMonth, closedOhneDatum, byLeadquelle, total: deals.length, avgDays };
+  }
+
+  function render({ byStage, byMonth, byCloseMonth, closedOhneDatum, byLeadquelle, total, avgDays }) {
     const won    = byStage['closedwon']    || 0;
     const lost   = byStage['closedlost']   || 0;
     const offers = byStage['contractsent'] || 0;
@@ -535,7 +718,10 @@
 
     document.getElementById('d-won').textContent  = `von ${total} Leads`;
     document.getElementById('d-rate').textContent = `${won} von ${decided} entschieden`;
-    document.getElementById('ts').textContent = 'Live · ' + new Date().toLocaleString('de-DE');
+    const oLabel = currentOwner === 'all'
+      ? 'Alle Mitarbeiter'
+      : (owners.find(o => o.id === currentOwner)?.name || currentOwner);
+    document.getElementById('ts').textContent = `Live · ${oLabel} · ` + new Date().toLocaleString('de-DE');
 
 
     /* Glow bars */
@@ -670,14 +856,180 @@
       }, 500 + idx * 80);
     });
 
+    renderWinLoss(byCloseMonth || {}, closedOhneDatum || 0);
+    renderTeam();
+
     currentPage = 1;
     renderTable();
+  }
+
+  /* ── Mitarbeiter-Übersicht (immer alle, unabhängig vom Filter) ── */
+  function renderTeam() {
+    const body = document.getElementById('teamBody');
+    const stats = {};
+    rawDeals.forEach(d => {
+      const id = d.ownerId;
+      if (!stats[id]) stats[id] = { name: d.ownerName, total: 0, won: 0, lost: 0, open: 0 };
+      stats[id].total++;
+      if (d.stage === 'closedwon')       stats[id].won++;
+      else if (d.stage === 'closedlost') stats[id].lost++;
+      else                               stats[id].open++;
+    });
+
+    const rows = Object.entries(stats).sort((a, b) => b[1].total - a[1].total);
+    body.innerHTML = rows.length ? rows.map(([id, st], idx) => {
+      const dec = st.won + st.lost;
+      const q   = dec > 0 ? Math.round(st.won / dec * 100) : null;
+      const col = q === null ? '#475569' : q >= 30 ? '#10b981' : q >= 15 ? '#f59e0b' : '#ef4444';
+      const oc  = ownerColor(id);
+      const active = id === currentOwner ? 'background:rgba(59,130,246,.06);' : '';
+      return `<tr class="row-click" style="${active}" onclick="setOwner('${id === currentOwner ? 'all' : id}')" title="Klicken zum Filtern">
+        <td><span class="lq-dot" style="background:${oc};box-shadow:0 0 8px ${oc}88"></span><b>${st.name}</b>${id === MY_OWNER_ID ? '<span class="team-me">DU</span>' : ''}</td>
+        <td style="color:#94a3b8">${st.total}</td>
+        <td style="color:#3b82f6;font-weight:700">${st.open}</td>
+        <td style="color:#10b981;font-weight:700">${st.won}</td>
+        <td style="color:#ef4444;font-weight:700">${st.lost}</td>
+        <td><div class="rate-wrap">
+          <div class="rate-track"><div class="rate-fill" id="tf${idx}" style="background:${col};box-shadow:0 0 8px ${col}88"></div></div>
+          <span class="rate-pct" style="color:${col}">${q !== null ? q + '%' : '—'}</span>
+        </div></td></tr>`;
+    }).join('') : '<tr><td colspan="6" class="msg">Keine Daten</td></tr>';
+
+    rows.forEach(([, st], idx) => {
+      const dec = st.won + st.lost, q = dec > 0 ? Math.round(st.won / dec * 100) : 0;
+      setTimeout(() => {
+        const el = document.getElementById('tf' + idx);
+        if (el) el.style.width = q + '%';
+      }, 500 + idx * 80);
+    });
+  }
+
+  /* ── Gewinn/Verlust pro Abschlussmonat ── */
+  function renderWinLoss(byCloseMonth, ohneDatum) {
+    const keys = Object.keys(byCloseMonth).sort();
+    const setStat = (id, subId, q, won, lost) => {
+      const el = document.getElementById(id);
+      if (q === null) {
+        el.textContent = '—'; el.style.color = 'var(--sub)'; el.style.textShadow = 'none';
+        document.getElementById(subId).textContent = 'keine Abschlüsse';
+        return;
+      }
+      const c = q >= 30 ? '#10b981' : q >= 15 ? '#f59e0b' : '#ef4444';
+      el.textContent = q + '%'; el.style.color = c; el.style.textShadow = `0 0 20px ${c}66`;
+      document.getElementById(subId).textContent = `${won} gewonnen · ${lost} verloren`;
+    };
+
+    if (!keys.length) {
+      setStat('wl-cur', 'wl-cur-sub', null);
+      setStat('wl-prev', 'wl-prev-sub', null);
+      setStat('wl-avg', 'wl-avg-sub', null);
+      document.getElementById('wl-hint').textContent = 'Noch keine entschiedenen Deals mit Abschlussdatum.';
+      if (wlC) { wlC.destroy(); wlC = null; }
+      return;
+    }
+
+    /* Lücken-Monate auffüllen, damit die Zeitachse durchgehend ist */
+    const months = [];
+    const [sy, sm] = keys[0].split('-').map(Number);
+    const now = new Date();
+    let cur = new Date(sy, sm - 1, 1);
+    const end = new Date(now.getFullYear(), now.getMonth(), 1);
+    while (cur <= end) {
+      months.push(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}`);
+      cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+    }
+
+    const wonArr  = months.map(m => byCloseMonth[m]?.won  || 0);
+    const lostArr = months.map(m => byCloseMonth[m]?.lost || 0);
+    const rateArr = months.map((m, i) => {
+      const dec = wonArr[i] + lostArr[i];
+      return dec > 0 ? Math.round(wonArr[i] / dec * 100) : null;
+    });
+
+    /* Kennzahlen oben rechts */
+    const iCur = months.length - 1, iPrev = months.length - 2;
+    setStat('wl-cur', 'wl-cur-sub', rateArr[iCur], wonArr[iCur], lostArr[iCur]);
+    if (iPrev >= 0) setStat('wl-prev', 'wl-prev-sub', rateArr[iPrev], wonArr[iPrev], lostArr[iPrev]);
+    else setStat('wl-prev', 'wl-prev-sub', null);
+
+    /* Ø letzte 6 Monate: aggregiert, nicht Mittel der Monatsquoten */
+    const from = Math.max(0, months.length - 6);
+    const w6 = wonArr.slice(from).reduce((a, b) => a + b, 0);
+    const l6 = lostArr.slice(from).reduce((a, b) => a + b, 0);
+    setStat('wl-avg', 'wl-avg-sub', (w6 + l6) > 0 ? Math.round(w6 / (w6 + l6) * 100) : null, w6, l6);
+
+    document.getElementById('wl-hint').textContent =
+      'Zuordnung nach Abschlussdatum (closedate), nicht nach Eingangsmonat des Leads.'
+      + (ohneDatum > 0 ? ` · ${ohneDatum} entschiedene Deal(s) ohne Abschlussdatum sind nicht enthalten.` : '');
+
+    const labels = months.map(m => new Date(m + '-01').toLocaleDateString('de-DE', { month: 'short', year: '2-digit' }));
+
+    if (wlC) wlC.destroy();
+    wlC = new Chart(document.getElementById('cWinLoss'), {
+      data: {
+        labels,
+        datasets: [
+          {
+            type: 'bar', label: 'Gewonnen', data: wonArr, yAxisID: 'y',
+            backgroundColor: 'rgba(16,185,129,.75)', hoverBackgroundColor: '#10b981',
+            borderRadius: 8, borderSkipped: false, stack: 'wl', order: 2,
+          },
+          {
+            type: 'bar', label: 'Verloren', data: lostArr, yAxisID: 'y',
+            backgroundColor: 'rgba(239,68,68,.7)', hoverBackgroundColor: '#ef4444',
+            borderRadius: 8, borderSkipped: false, stack: 'wl', order: 2,
+          },
+          {
+            type: 'line', label: 'Gewinnquote', data: rateArr, yAxisID: 'y1',
+            borderColor: '#3b82f6', backgroundColor: '#3b82f6',
+            borderWidth: 2.5, tension: .35, spanGaps: true,
+            pointRadius: 4, pointHoverRadius: 6,
+            pointBackgroundColor: '#020817', pointBorderColor: '#3b82f6', pointBorderWidth: 2,
+            order: 1,
+          },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        animation: { duration: 1100, easing: 'easeOutQuart' },
+        plugins: {
+          legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 14, usePointStyle: true, color: '#94a3b8' } },
+          tooltip: {
+            backgroundColor: 'rgba(10,18,38,.96)', borderColor: 'rgba(59,130,246,.3)',
+            borderWidth: 1, cornerRadius: 10, padding: 10,
+            callbacks: {
+              label: ctx => ctx.dataset.label === 'Gewinnquote'
+                ? (ctx.parsed.y === null ? 'Gewinnquote: —' : `Gewinnquote: ${ctx.parsed.y}%`)
+                : `${ctx.dataset.label}: ${ctx.parsed.y}`,
+              afterBody: items => {
+                const i = items[0].dataIndex, dec = wonArr[i] + lostArr[i];
+                return dec > 0 ? `Entschieden: ${dec}` : '';
+              }
+            }
+          }
+        },
+        scales: {
+          y:  { stacked: true, beginAtZero: true, position: 'left',
+                grid: { color: 'rgba(255,255,255,.04)' },
+                ticks: { precision: 0, font: { size: 11 }, color: '#475569' },
+                title: { display: true, text: 'Deals', color: '#475569', font: { size: 10 } } },
+          y1: { beginAtZero: true, max: 100, position: 'right',
+                grid: { display: false },
+                ticks: { callback: v => v + '%', font: { size: 11 }, color: '#3b82f6' },
+                title: { display: true, text: 'Quote', color: '#3b82f6', font: { size: 10 } } },
+          x:  { stacked: true, grid: { display: false }, ticks: { font: { size: 11 }, color: '#475569' } }
+        }
+      }
+    });
   }
 
   function renderTable() {
     const q = (document.getElementById('search').value || '').toLowerCase();
     const filtered = allDeals
-      .filter(d => (d.name || '').toLowerCase().includes(q) || (d.leadquelle || '').toLowerCase().includes(q))
+      .filter(d => (d.name || '').toLowerCase().includes(q)
+                || (d.leadquelle || '').toLowerCase().includes(q)
+                || (d.ownerName  || '').toLowerCase().includes(q))
       .sort((a, b) => (b.createdate || '').localeCompare(a.createdate || ''));
     const pages = Math.ceil(filtered.length / PAGE_SIZE) || 1;
     currentPage = Math.min(currentPage, pages);
@@ -692,15 +1044,17 @@
           const lostCell = d.lostReason
             ? `<span class="badge" style="background:rgba(239,68,68,.1);color:#fca5a5;border-color:rgba(239,68,68,.2);max-width:180px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${d.lostReason}">${d.lostReason}</span>`
             : `<span style="color:#334155;font-size:13px">—</span>`;
+          const oc = ownerColor(d.ownerId);
           return `<tr>
             <td style="font-weight:600">${d.name}</td>
+            <td><span class="badge" style="background:${oc}18;color:${oc};border-color:${oc}33">${d.ownerName}</span></td>
             <td><span class="badge" style="background:${lqc}18;color:${lqc};border-color:${lqc}33">${d.leadquelle}</span></td>
             <td><span class="badge" style="background:${c.color}18;color:${c.color};border-color:${c.color}33">${c.label}</span></td>
             <td style="color:var(--sub)">${date}</td>
             <td style="text-align:center">${noteCell}</td>
             <td>${lostCell}</td></tr>`;
         }).join('')
-      : '<tr><td colspan="4" class="msg">Keine Ergebnisse</td></tr>';
+      : '<tr><td colspan="7" class="msg">Keine Ergebnisse</td></tr>';
     document.getElementById('pageInfo').textContent = `${filtered.length} Einträge · Seite ${currentPage} von ${pages}`;
     document.getElementById('btnPrev').disabled = currentPage <= 1;
     document.getElementById('btnNext').disabled = currentPage >= pages;
