@@ -346,11 +346,26 @@
   </div>
 
   <div class="card">
-    <div class="section-title"><div class="pip"></div>Abschlussquote nach Leadquelle</div>
+    <div class="wl-head">
+      <div>
+        <div class="section-title" style="margin:0 0 10px"><div class="pip"></div>Abschlussquote nach Leadquelle</div>
+        <div class="wl-toggle">
+          <button id="lqBtnCreate" class="on" onclick="setLqMode('create')">Nach Entstehungsmonat</button>
+          <button id="lqBtnClose" onclick="setLqMode('close')">Nach Abschlussmonat</button>
+        </div>
+      </div>
+      <div class="owner-filter">
+        <label for="lqMonthSel">Zeitraum</label>
+        <select class="owner-select" id="lqMonthSel" style="min-width:180px" onchange="setLqMonth(this.value)">
+          <option value="all">Alle Monate</option>
+        </select>
+      </div>
+    </div>
     <table>
-      <thead><tr><th>Leadquelle</th><th>Leads</th><th>Gewonnen</th><th>Verloren</th><th>Quote</th></tr></thead>
-      <tbody id="lqBody"><tr><td colspan="5" class="msg">Lade ...</td></tr></tbody>
+      <thead id="lqHead"></thead>
+      <tbody id="lqBody"><tr><td colspan="6" class="msg">Lade ...</td></tr></tbody>
     </table>
+    <div class="wl-hint" id="lqHint"></div>
   </div>
 
   <div class="card" id="teamCard">
@@ -434,6 +449,7 @@
   let mC, dC, lqC, wlC, allDeals = [], lqKeys = [], currentPage = 1;
   let rawDeals = [], owners = [], currentOwner = 'all';
   let wlMode = 'create';   // 'create' = Entstehungsmonat (Kohorte), 'close' = Abschlussmonat
+  let lqMode = 'create', lqMonth = 'all';   // Basis und Zeitraum der Leadquellen-Tabelle
   let lastStats = null;
   const MY_OWNER_ID = '90396933';   // Calvin - bekommt ein "DU"-Badge in der Team-Tabelle
   const OWNER_COLORS = ['#1a1a1f','#fcb618','#2e9e6b','#d99a08','#7a7a85','#c17f3a','#4a7dbf'];
@@ -723,46 +739,103 @@
       }
     });
 
-    /* LQ Abschlussquote */
-    const lqStats = {};
-    allDeals.forEach(d => {
-      const lq = d.leadquelle || 'Unbekannt';
-      if (!lqStats[lq]) lqStats[lq] = { total: 0, won: 0, lost: 0 };
-      lqStats[lq].total++;
-      if (d.stage === 'closedwon')  lqStats[lq].won++;
-      if (d.stage === 'closedlost') lqStats[lq].lost++;
-    });
-    const lqRows = Object.entries(lqStats).filter(([lq]) => lq !== 'Unbekannt').sort((a, b) => b[1].total - a[1].total);
-    const lqBody = document.getElementById('lqBody');
-    lqBody.innerHTML = lqRows.length ? lqRows.map(([lq, s], idx) => {
-      const dec = s.won + s.lost, q = dec > 0 ? Math.round(s.won / dec * 100) : null;
-      const col = q === null ? C.grey : quoteColor(q);
-      const lqc = lqColor(lq);
-      return `<tr>
-        <td><span class="lq-dot" style="background:${lqc}"></span><b>${lq}</b></td>
-        <td>${s.total}</td>
-        <td style="color:${s.won  ? C.green : C.greyLight};font-weight:600">${s.won}</td>
-        <td style="color:${s.lost ? C.red   : C.greyLight};font-weight:600">${s.lost}</td>
-        <td><div class="rate-wrap">
-          <div class="rate-track"><div class="rate-fill" id="rf${idx}" style="background:${col}"></div></div>
-          <span class="rate-pct" style="color:${col}">${q !== null ? q + '%' : '—'}</span>
-        </div></td></tr>`;
-    }).join('') : '<tr><td colspan="5" class="msg">Keine Daten</td></tr>';
-
-    /* Trigger rate-fill animations */
-    lqRows.forEach(([lq, s], idx) => {
-      const dec = s.won + s.lost, q = dec > 0 ? Math.round(s.won / dec * 100) : 0;
-      setTimeout(() => {
-        const el = document.getElementById('rf' + idx);
-        if (el) el.style.width = q + '%';
-      }, 500 + idx * 80);
-    });
+    renderLeadquelle();
 
     renderWinLoss();
     renderTeam();
 
     currentPage = 1;
     renderTable();
+  }
+
+  /* ── Abschlussquote nach Leadquelle ──
+     'create' = Deal zählt in den Monat, in dem er angelegt wurde
+     'close'  = Deal zählt in den Monat, in dem er gewonnen/verloren wurde   */
+  const monthLabel = m => new Date(m + '-01').toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+
+  function setLqMode(mode) {
+    lqMode = mode;
+    lqMonth = 'all';
+    document.getElementById('lqBtnCreate').classList.toggle('on', mode === 'create');
+    document.getElementById('lqBtnClose').classList.toggle('on',  mode === 'close');
+    renderLeadquelle();
+  }
+
+  function setLqMonth(m) { lqMonth = m; renderLeadquelle(); }
+
+  function renderLeadquelle() {
+    const cohort = lqMode === 'create';
+
+    /* Grundmenge: im Kohortenmodus alle Deals, sonst nur entschiedene mit Abschlussdatum */
+    const pool = allDeals.filter(d => cohort
+      ? !!d.createdate
+      : ((d.stage === 'closedwon' || d.stage === 'closedlost') && !!d.closedate));
+    const monthOf = d => (cohort ? d.createdate : d.closedate).substring(0, 7);
+
+    /* Monatsliste aufbauen, Auswahl bei Bedarf zurücksetzen */
+    const monthsAvail = [...new Set(pool.map(monthOf))].sort().reverse();
+    if (lqMonth !== 'all' && !monthsAvail.includes(lqMonth)) lqMonth = 'all';
+    const sel = document.getElementById('lqMonthSel');
+    sel.innerHTML = `<option value="all">Alle Monate (${pool.length})</option>`
+      + monthsAvail.map(m => {
+          const n = pool.filter(d => monthOf(d) === m).length;
+          return `<option value="${m}">${monthLabel(m)} (${n})</option>`;
+        }).join('');
+    sel.value = lqMonth;
+
+    const rows = lqMonth === 'all' ? pool : pool.filter(d => monthOf(d) === lqMonth);
+
+    /* Kennzahlen je Quelle */
+    const stats = {};
+    rows.forEach(d => {
+      const lq = d.leadquelle || 'Unbekannt';
+      if (!stats[lq]) stats[lq] = { total: 0, won: 0, lost: 0, open: 0 };
+      stats[lq].total++;
+      if (d.stage === 'closedwon')       stats[lq].won++;
+      else if (d.stage === 'closedlost') stats[lq].lost++;
+      else                               stats[lq].open++;
+    });
+
+    /* Kopfzeile je Modus */
+    document.getElementById('lqHead').innerHTML = cohort
+      ? '<tr><th>Leadquelle</th><th>Leads</th><th>Offen</th><th>Gewonnen</th><th>Verloren</th><th>Quote</th></tr>'
+      : '<tr><th>Leadquelle</th><th>Entschieden</th><th>Gewonnen</th><th>Verloren</th><th>Quote</th></tr>';
+    const cols = cohort ? 6 : 5;
+
+    const list = Object.entries(stats)
+      .filter(([lq]) => lq !== 'Unbekannt')
+      .sort((a, b) => b[1].total - a[1].total);
+
+    const body = document.getElementById('lqBody');
+    body.innerHTML = list.length ? list.map(([lq, st], idx) => {
+      const dec = st.won + st.lost;
+      const q   = dec > 0 ? Math.round(st.won / dec * 100) : null;
+      const col = q === null ? C.grey : quoteColor(q);
+      const lqc = lqColor(lq);
+      return `<tr>
+        <td><span class="lq-dot" style="background:${lqc}"></span><b style="font-weight:600">${lq}</b></td>
+        <td>${st.total}</td>
+        ${cohort ? `<td style="color:${st.open ? C.amberDark : C.greyLight};font-weight:600">${st.open}</td>` : ''}
+        <td style="color:${st.won  ? C.green : C.greyLight};font-weight:600">${st.won}</td>
+        <td style="color:${st.lost ? C.red   : C.greyLight};font-weight:600">${st.lost}</td>
+        <td><div class="rate-wrap">
+          <div class="rate-track"><div class="rate-fill" id="rf${idx}" style="background:${col}"></div></div>
+          <span class="rate-pct" style="color:${col}">${q !== null ? q + '%' : '—'}</span>
+        </div></td></tr>`;
+    }).join('') : `<tr><td colspan="${cols}" class="msg">Keine Daten für diesen Zeitraum</td></tr>`;
+
+    list.forEach(([, st], idx) => {
+      const dec = st.won + st.lost, q = dec > 0 ? Math.round(st.won / dec * 100) : 0;
+      setTimeout(() => {
+        const el = document.getElementById('rf' + idx);
+        if (el) el.style.width = q + '%';
+      }, 300 + idx * 70);
+    });
+
+    const zeitraum = lqMonth === 'all' ? 'alle Monate' : monthLabel(lqMonth);
+    document.getElementById('lqHint').textContent = cohort
+      ? `Entstehungsmonat, ${zeitraum}: Gezählt werden alle Leads, die in diesem Zeitraum angelegt wurden — unabhängig davon, wann sie entschieden wurden. Offene Deals sind in "Leads" enthalten, aber nicht in der Quote.`
+      : `Abschlussmonat, ${zeitraum}: Gezählt werden nur Deals, die in diesem Zeitraum auf gewonnen oder verloren gesetzt wurden. Noch offene Deals kommen hier nicht vor.`;
   }
 
   /* ── Mitarbeiter-Übersicht (immer alle, unabhängig vom Filter) ── */
