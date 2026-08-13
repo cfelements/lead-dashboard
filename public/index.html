@@ -190,6 +190,11 @@
 
     /* ─────────── Kundenliste ─────────── */
     .list-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; gap: 16px; flex-wrap: wrap; }
+    .list-filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .list-filters .owner-select { min-width: 150px; padding-top: 8px; padding-bottom: 8px; font-size: 12px; }
+    #listReset { display: none; }
+    #listReset.on { display: inline-block; }
+
     .search-input {
       background: var(--card); border: 1px solid var(--line);
       padding: 9px 13px; font-size: 13px; color: var(--ink); width: 250px;
@@ -433,7 +438,16 @@
   <div class="card list-card">
     <div class="list-header">
       <div class="section-title" style="margin:0"><div class="pip"></div>Kundenliste</div>
-      <input class="search-input" type="search" id="search" placeholder="Name, Quelle oder Mitarbeiter suchen ..." oninput="renderTable()">
+      <div class="list-filters">
+        <select class="owner-select" id="listLqSel" onchange="setListFilter('lq', this.value)">
+          <option value="all">Alle Leadquellen</option>
+        </select>
+        <select class="owner-select" id="listStageSel" onchange="setListFilter('stage', this.value)">
+          <option value="all">Alle Status</option>
+        </select>
+        <input class="search-input" type="search" id="search" placeholder="Name, Quelle oder Mitarbeiter ..." oninput="currentPage=1; renderTable()">
+        <button class="note-btn" id="listReset" onclick="resetListFilters()">Filter zur&uuml;cksetzen</button>
+      </div>
     </div>
     <table>
       <thead><tr><th>Name</th><th>Mitarbeiter</th><th>Leadquelle</th><th>Status</th><th>Erstellt</th><th>Notiz</th><th>Verlustgrund</th></tr></thead>
@@ -517,6 +531,7 @@
   let rawDeals = [], owners = [], currentOwner = 'all';
   let wlMode = 'create';   // 'create' = Entstehungsmonat (Kohorte), 'close' = Abschlussmonat
   let lqMode = 'create', lqMonth = 'all';   // Basis und Zeitraum der Leadquellen-Tabelle
+  let listLq = 'all', listStage = 'all';     // Filter der Kundenliste
   let lastStats = null;
   const MY_OWNER_ID = '90396933';   // Calvin - bekommt ein "DU"-Badge in der Team-Tabelle
   const OWNER_COLORS = ['#1a1a1f','#fcb618','#2e9e6b','#d99a08','#7a7a85','#c17f3a','#4a7dbf'];
@@ -811,6 +826,7 @@
     renderWinLoss();
     renderTeam();
 
+    buildListFilters();
     currentPage = 1;
     renderTable();
   }
@@ -1095,6 +1111,8 @@
   function renderTable() {
     const q = (document.getElementById('search').value || '').toLowerCase();
     const filtered = allDeals
+      .filter(d => listLq === 'all' || (d.leadquelle || 'Unbekannt') === listLq)
+      .filter(d => listStage === 'all' || d.stage === listStage)
       .filter(d => (d.name || '').toLowerCase().includes(q)
                 || (d.leadquelle || '').toLowerCase().includes(q)
                 || (d.ownerName  || '').toLowerCase().includes(q))
@@ -1123,12 +1141,59 @@
             <td>${lostCell}</td></tr>`;
         }).join('')
       : '<tr><td colspan="7" class="msg">Keine Ergebnisse</td></tr>';
-    document.getElementById('pageInfo').textContent = `${filtered.length} Einträge · Seite ${currentPage} von ${pages}`;
+    const aktiv = listLq !== 'all' || listStage !== 'all' || q !== '';
+    document.getElementById('listReset').classList.toggle('on', aktiv);
+    document.getElementById('pageInfo').textContent =
+      `${filtered.length} von ${allDeals.length} Einträgen · Seite ${currentPage} von ${pages}`;
     document.getElementById('btnPrev').disabled = currentPage <= 1;
     document.getElementById('btnNext').disabled = currentPage >= pages;
   }
 
   function changePage(dir) { currentPage += dir; renderTable(); }
+
+  /* ── Filter der Kundenliste ── */
+  function setListFilter(which, value) {
+    if (which === 'lq') listLq = value; else listStage = value;
+    currentPage = 1;
+    renderTable();
+  }
+
+  function resetListFilters() {
+    listLq = 'all'; listStage = 'all';
+    document.getElementById('search').value = '';
+    document.getElementById('listLqSel').value = 'all';
+    document.getElementById('listStageSel').value = 'all';
+    currentPage = 1;
+    renderTable();
+  }
+
+  /* Auswahllisten aus der aktuellen (nach Mitarbeiter gefilterten) Menge aufbauen */
+  function buildListFilters() {
+    const lqCount = {}, stCount = {};
+    allDeals.forEach(d => {
+      const lq = d.leadquelle || 'Unbekannt';
+      lqCount[lq] = (lqCount[lq] || 0) + 1;
+      stCount[d.stage] = (stCount[d.stage] || 0) + 1;
+    });
+
+    if (listLq !== 'all' && !lqCount[listLq]) listLq = 'all';
+    if (listStage !== 'all' && !stCount[listStage]) listStage = 'all';
+
+    const lqSel = document.getElementById('listLqSel');
+    lqSel.innerHTML = `<option value="all">Alle Leadquellen (${allDeals.length})</option>`
+      + Object.entries(lqCount).sort((a, b) => b[1] - a[1])
+          .map(([lq, n]) => `<option value="${lq}">${lq} (${n})</option>`).join('');
+    lqSel.value = listLq;
+
+    /* Status in der Reihenfolge der Pipeline, nicht nach Häufigkeit */
+    const stSel = document.getElementById('listStageSel');
+    const known = STAGES.filter(st => stCount[st.key]);
+    const unknown = Object.keys(stCount).filter(k => !STAGES.some(st => st.key === k));
+    stSel.innerHTML = `<option value="all">Alle Status (${allDeals.length})</option>`
+      + known.map(st => `<option value="${st.key}">${st.label} (${stCount[st.key]})</option>`).join('')
+      + unknown.map(k => `<option value="${k}">${k} (${stCount[k]})</option>`).join('');
+    stSel.value = listStage;
+  }
 
   /* ── Notizen ── */
   const noteCache = {};
