@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lead Dashboard | Volta Energiesysteme</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      /* Markenfarben laut voltapv.de */
+      --amber:      #fcb618;
+      --amber-dark: #d99a08;
+      --amber-soft: #fef6e2;
+      --ink:        #000000;
+      --ink-soft:   #3f3f46;
+      --muted:      #78787f;
+      --line:       #e7e7ea;
+      --line-soft:  #f1f1f3;
+      --page:       #f6f6f7;
+      --card:       #ffffff;
+      --green:      #2e9e6b;
+      --green-soft: #e8f5ef;
+      --red:        #d14343;
+      --red-soft:   #fbeaea;
+      --shadow:     0 1px 2px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.04);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Poppins', -apple-system, system-ui, sans-serif;
+      background: var(--page);
+      color: var(--ink);
+      font-size: 14px;
+      line-height: 1.5;
+      padding: 0 0 48px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .wrap { max-width: 1400px; margin: 0 auto; padding: 0 28px; }
+
+    /* ─────────── Kopfzeile ─────────── */
+    .topbar {
+      background: var(--card);
+      border-bottom: 1px solid var(--line);
+      padding: 16px 0;
+      margin-bottom: 28px;
+    }
+    .topbar-inner { display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+    .brand { display: flex; align-items: center; gap: 18px; }
+    .brand img { height: 38px; width: auto; display: block; }
+    .brand-fallback { font-weight: 700; font-size: 20px; letter-spacing: .16em; }
+    .brand-divider { width: 1px; height: 34px; background: var(--line); }
+    .brand-title { font-size: 17px; font-weight: 600; letter-spacing: -.01em; }
+    .brand-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+    .controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+    .owner-filter { display: flex; align-items: center; gap: 9px; }
+    .owner-filter label {
+      font-size: 10px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .1em;
+    }
+    .owner-select {
+      background: var(--card); border: 1px solid var(--line);
+      padding: 9px 34px 9px 13px;
+      font-size: 13px; font-weight: 500; color: var(--ink);
+      font-family: inherit; cursor: pointer; outline: none;
+      min-width: 210px; transition: border-color .18s;
+      appearance: none;
+      background-image: linear-gradient(45deg, transparent 50%, #9a9aa2 50%), linear-gradient(135deg, #9a9aa2 50%, transparent 50%);
+      background-position: calc(100% - 17px) calc(50% + 1px), calc(100% - 12px) calc(50% + 1px);
+      background-size: 5px 5px, 5px 5px;
+      background-repeat: no-repeat;
+    }
+    .owner-select:hover { border-color: #cfcfd4; }
+    .owner-select:focus { border-color: var(--amber); }
+
+    .filter-pill {
+      display: none; align-items: center; gap: 8px;
+      background: var(--amber-soft); border: 1px solid #f5dda0;
+      padding: 6px 12px; font-size: 12px; font-weight: 500; color: #8a6405;
+    }
+    .filter-pill.on { display: inline-flex; }
+    .filter-pill button {
+      background: none; border: none; color: #8a6405; cursor: pointer;
+      font-size: 15px; line-height: 1; padding: 0; font-family: inherit; opacity: .6;
+    }
+    .filter-pill button:hover { opacity: 1; }
+
+    .refresh-btn {
+      background: var(--ink); border: 1px solid var(--ink);
+      padding: 10px 20px;
+      font-size: 11px; font-weight: 600; color: #fff;
+      text-transform: uppercase; letter-spacing: .08em;
+      cursor: pointer; font-family: inherit;
+      transition: background .18s, color .18s;
+    }
+    .refresh-btn:hover { background: var(--amber); border-color: var(--amber); color: var(--ink); }
+
+    /* ─────────── Karten ─────────── */
+    .card {
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: 4px; box-shadow: var(--shadow);
+      padding: 22px 24px; margin-bottom: 18px;
+    }
+
+    .section-title {
+      display: flex; align-items: center; gap: 9px;
+      font-size: 11px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .1em;
+      margin-bottom: 18px;
+    }
+    .section-title .pip { width: 3px; height: 13px; background: var(--amber); flex-shrink: 0; }
+
+    /* ─────────── KPI ─────────── */
+    .kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 18px; }
+    .kpi {
+      background: var(--card); border: 1px solid var(--line);
+      border-radius: 4px; box-shadow: var(--shadow);
+      padding: 20px 22px 18px;
+    }
+    .kpi-label { font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; }
+    .kpi-value { font-size: 36px; font-weight: 600; line-height: 1.1; letter-spacing: -.03em; margin-top: 10px; }
+    .kpi-desc { font-size: 11px; color: var(--muted); margin-top: 4px; }
+    .kpi-bar { height: 3px; background: var(--line-soft); margin-top: 14px; overflow: hidden; }
+    .kpi-bar span { display: block; height: 100%; width: 0%; background: var(--amber); transition: width .9s cubic-bezier(.22,1,.36,1); }
+
+    /* ─────────── Charts ─────────── */
+    .charts-row { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+    .chart-wrap { position: relative; height: 200px; }
+
+    /* ─────────── Gewinn/Verlust ─────────── */
+    .wl-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 18px; flex-wrap: wrap; gap: 16px; }
+    .wl-stats { display: flex; gap: 28px; }
+    .wl-stat { text-align: right; }
+    .wl-stat-label { font-size: 9px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; }
+    .wl-stat-value { font-size: 24px; font-weight: 600; letter-spacing: -.02em; line-height: 1.3; }
+    .wl-stat-sub { font-size: 10px; color: var(--muted); }
+    .wl-wrap { position: relative; height: 250px; }
+    .wl-toggle { display: inline-flex; border: 1px solid var(--line); overflow: hidden; }
+    .wl-toggle button {
+      background: var(--card); border: none; border-right: 1px solid var(--line);
+      padding: 7px 13px; font-size: 11px; font-weight: 500; color: var(--muted);
+      font-family: inherit; cursor: pointer; transition: background .18s, color .18s;
+    }
+    .wl-toggle button:last-child { border-right: none; }
+    .wl-toggle button:hover { background: #fafafb; }
+    .wl-toggle button.on { background: var(--amber); color: var(--ink); font-weight: 600; }
+    .wl-hint { font-size: 10px; color: var(--muted); margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+
+    /* ─────────── Pipeline ─────────── */
+    .pr { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+    .pr-label { font-size: 12px; color: var(--ink-soft); width: 200px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pr-track { flex: 1; height: 18px; background: var(--line-soft); position: relative; }
+    .pr-bar { height: 100%; width: 0%; transition: width .9s cubic-bezier(.22,1,.36,1); }
+    .pr-count { font-size: 12px; font-weight: 600; width: 30px; text-align: right; color: var(--ink-soft); }
+
+    /* ─────────── Tabellen ─────────── */
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      text-align: left; font-size: 10px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .1em; padding: 0 12px 11px;
+      border-bottom: 1px solid var(--line);
+    }
+    th:not(:first-child) { text-align: right; }
+    td { padding: 11px 12px; font-size: 13px; border-bottom: 1px solid var(--line-soft); }
+    td:not(:first-child) { text-align: right; }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: #fafafb; }
+
+    .list-card th:not(:first-child), .list-card td:not(:first-child) { text-align: left; }
+
+    .lq-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 9px; vertical-align: middle; }
+
+    .rate-wrap { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
+    .rate-track { width: 72px; background: var(--line-soft); height: 5px; overflow: hidden; }
+    .rate-fill { height: 100%; width: 0%; transition: width .9s cubic-bezier(.22,1,.36,1); }
+    .rate-pct { font-size: 13px; font-weight: 600; min-width: 38px; text-align: right; }
+
+    .team-me {
+      font-size: 9px; font-weight: 600; color: #8a6405; letter-spacing: .08em;
+      background: var(--amber-soft); padding: 2px 7px; margin-left: 9px; vertical-align: middle;
+    }
+    .row-click { cursor: pointer; }
+    .row-active td { background: var(--amber-soft) !important; }
+
+    /* ─────────── Kundenliste ─────────── */
+    .list-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; gap: 16px; flex-wrap: wrap; }
+    .search-input {
+      background: var(--card); border: 1px solid var(--line);
+      padding: 9px 13px; font-size: 13px; color: var(--ink); width: 250px;
+      outline: none; font-family: inherit; transition: border-color .18s;
+    }
+    .search-input::placeholder { color: #a8a8b0; }
+    .search-input:focus { border-color: var(--amber); }
+
+    .badge {
+      display: inline-block; padding: 3px 10px;
+      font-size: 11px; font-weight: 600; border: 1px solid transparent;
+      white-space: nowrap;
+    }
+
+    .pagination { display: flex; align-items: center; justify-content: space-between; margin-top: 16px; font-size: 12px; color: var(--muted); }
+    .page-btns button {
+      background: var(--card); border: 1px solid var(--line);
+      padding: 7px 15px; font-size: 12px; cursor: pointer;
+      color: var(--ink); margin-left: 8px; font-family: inherit; transition: border-color .18s;
+    }
+    .page-btns button:hover:not(:disabled) { border-color: var(--amber); }
+    .page-btns button:disabled { opacity: .35; cursor: default; }
+
+    .msg { text-align: center; color: var(--muted); font-size: 13px; padding: 26px 0; }
+    .err { background: var(--red-soft); border: 1px solid #f0c4c4; padding: 14px; color: #9c2b2b; font-size: 13px; }
+
+    .footnote { font-size: 11px; color: var(--muted); text-align: center; margin-top: 26px; }
+
+    @media (max-width: 1100px) {
+      .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+      .charts-row { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 680px) {
+      .wrap { padding: 0 16px; }
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .wl-stats { gap: 18px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="wrap topbar-inner">
+    <div class="brand">
+      <img src="https://voltapv.de/wp-content/uploads/2025/10/volta-energiesysteme-final.svg"
+           alt="Volta Energiesysteme GmbH"
+           onerror="this.outerHTML='<div class=&quot;brand-fallback&quot;>VOLTA</div>'">
+      <div class="brand-divider"></div>
+      <div>
+        <div class="brand-title">Lead Dashboard</div>
+        <div class="brand-sub" id="ts">Verbinde mit HubSpot ...</div>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="filter-pill" id="filterPill">
+        <span id="filterPillText"></span>
+        <button onclick="setOwner('all')" title="Filter aufheben">&times;</button>
+      </div>
+      <div class="owner-filter">
+        <label for="ownerSelect">Mitarbeiter</label>
+        <select class="owner-select" id="ownerSelect" onchange="setOwner(this.value)">
+          <option value="all">Alle Mitarbeiter</option>
+        </select>
+      </div>
+      <button class="refresh-btn" onclick="load()">Aktualisieren</button>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div class="kpi-grid">
+    <div class="kpi">
+      <div class="kpi-label">Deals gesamt</div>
+      <div class="kpi-value" id="k-total">&mdash;</div>
+      <div class="kpi-desc">Alle Leads</div>
+      <div class="kpi-bar"><span id="gb-total"></span></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Abgeschlossen</div>
+      <div class="kpi-value" id="k-won" style="color:var(--green)">&mdash;</div>
+      <div class="kpi-desc" id="d-won">Closed Won</div>
+      <div class="kpi-bar"><span id="gb-won"></span></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Abschlussquote</div>
+      <div class="kpi-value" id="k-rate">&mdash;</div>
+      <div class="kpi-desc" id="d-rate">von entschiedenen</div>
+      <div class="kpi-bar"><span id="gb-rate"></span></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Angebote offen</div>
+      <div class="kpi-value" id="k-offers" style="color:var(--amber-dark)">&mdash;</div>
+      <div class="kpi-desc">Angebot versendet</div>
+      <div class="kpi-bar"><span id="gb-offers"></span></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Heiss</div>
+      <div class="kpi-value" id="k-hot" style="color:var(--green)">&mdash;</div>
+      <div class="kpi-desc">Kurz vor Abschluss</div>
+      <div class="kpi-bar"><span id="gb-hot"></span></div>
+    </div>
+  </div>
+
+  <div class="charts-row">
+    <div class="card" style="margin:0">
+      <div class="section-title"><div class="pip"></div>Neue Deals pro Monat</div>
+      <div class="chart-wrap"><canvas id="cMonthly"></canvas></div>
+    </div>
+    <div class="card" style="margin:0">
+      <div class="section-title"><div class="pip"></div>Status-Verteilung</div>
+      <div class="chart-wrap"><canvas id="cDonut"></canvas></div>
+    </div>
+    <div class="card" style="margin:0">
+      <div class="section-title"><div class="pip"></div>Leads nach Quelle</div>
+      <div class="chart-wrap"><canvas id="cLeadquelle"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="wl-head">
+      <div>
+        <div class="section-title" style="margin:0 0 10px"><div class="pip"></div>Gewinn &amp; Verlust pro Monat</div>
+        <div class="wl-toggle">
+          <button id="wlBtnCreate" class="on" onclick="setWlMode('create')">Nach Entstehungsmonat</button>
+          <button id="wlBtnClose" onclick="setWlMode('close')">Nach Abschlussmonat</button>
+        </div>
+      </div>
+      <div class="wl-stats">
+        <div class="wl-stat">
+          <div class="wl-stat-label">Laufender Monat</div>
+          <div class="wl-stat-value" id="wl-cur">&mdash;</div>
+          <div class="wl-stat-sub" id="wl-cur-sub">&mdash;</div>
+        </div>
+        <div class="wl-stat">
+          <div class="wl-stat-label">Vormonat</div>
+          <div class="wl-stat-value" id="wl-prev">&mdash;</div>
+          <div class="wl-stat-sub" id="wl-prev-sub">&mdash;</div>
+        </div>
+        <div class="wl-stat">
+          <div class="wl-stat-label">&Oslash; letzte 6 Monate</div>
+          <div class="wl-stat-value" id="wl-avg">&mdash;</div>
+          <div class="wl-stat-sub" id="wl-avg-sub">&mdash;</div>
+        </div>
+      </div>
+    </div>
+    <div class="wl-wrap"><canvas id="cWinLoss"></canvas></div>
+    <div class="wl-hint" id="wl-hint"></div>
+  </div>
+
+  <div class="card">
+    <div class="section-title"><div class="pip"></div>Pipeline-&Uuml;bersicht</div>
+    <div id="pipeline"><div class="msg">Lade ...</div></div>
+  </div>
+
+  <div class="card">
+    <div class="wl-head">
+      <div>
+        <div class="section-title" style="margin:0 0 10px"><div class="pip"></div>Abschlussquote nach Leadquelle</div>
+        <div class="wl-toggle">
+          <button id="lqBtnCreate" class="on" onclick="setLqMode('create')">Nach Entstehungsmonat</button>
+          <button id="lqBtnClose" onclick="setLqMode('close')">Nach Abschlussmonat</button>
+        </div>
+      </div>
+      <div class="owner-filter">
+        <label for="lqMonthSel">Zeitraum</label>
+        <select class="owner-select" id="lqMonthSel" style="min-width:180px" onchange="setLqMonth(this.value)">
+          <option value="all">Alle Monate</option>
+        </select>
+      </div>
+    </div>
+    <table>
+      <thead id="lqHead"></thead>
+      <tbody id="lqBody"><tr><td colspan="6" class="msg">Lade ...</td></tr></tbody>
+    </table>
+    <div class="wl-hint" id="lqHint"></div>
+  </div>
+
+  <div class="card" id="teamCard">
+    <div class="section-title"><div class="pip"></div>Mitarbeiter-&Uuml;bersicht</div>
+    <table>
+      <thead><tr><th>Mitarbeiter</th><th>Leads</th><th>Offen</th><th>Gewonnen</th><th>Verloren</th><th>Quote</th></tr></thead>
+      <tbody id="teamBody"><tr><td colspan="6" class="msg">Lade ...</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="card list-card">
+    <div class="list-header">
+      <div class="section-title" style="margin:0"><div class="pip"></div>Kundenliste</div>
+      <input class="search-input" type="search" id="search" placeholder="Name, Quelle oder Mitarbeiter suchen ..." oninput="renderTable()">
+    </div>
+    <table>
+      <thead><tr><th>Name</th><th>Mitarbeiter</th><th>Leadquelle</th><th>Status</th><th>Erstellt</th><th>Notiz</th><th>Verlustgrund</th></tr></thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+    <div class="pagination">
+      <span id="pageInfo"></span>
+      <div class="page-btns">
+        <button id="btnPrev" onclick="changePage(-1)">Zur&uuml;ck</button>
+        <button id="btnNext" onclick="changePage(1)">Weiter</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="footnote">Volta Energiesysteme GmbH &middot; Interne Auswertung aus HubSpot</div>
+
+</div>
+
+<script>
+
+  /* ── Config ── */
+  Chart.defaults.color = '#78787f';
+  Chart.defaults.borderColor = '#f1f1f3';
+  Chart.defaults.font.family = "'Poppins', sans-serif";
+  Chart.defaults.font.size = 11;
+
+  /* Markenpalette (voltapv.de) */
+  const C = {
+    amber: '#fcb618', amberDark: '#d99a08', amberLight: '#fddc8c',
+    ink: '#1a1a1f', green: '#2e9e6b', red: '#d14343',
+    grey: '#9a9aa2', greyLight: '#c9c9d0', line: '#f1f1f3',
+  };
+  const quoteColor = q => q >= 30 ? C.green : q >= 15 ? C.amberDark : C.red;
+  const TIP = {
+    backgroundColor: '#1a1a1f', titleColor: '#fff', bodyColor: '#e6e6ea',
+    borderColor: 'rgba(0,0,0,0)', cornerRadius: 3, padding: 10,
+    titleFont: { family: "'Poppins', sans-serif", size: 12, weight: '600' },
+    bodyFont:  { family: "'Poppins', sans-serif", size: 12 },
+  };
+
+  const STAGES = [
+    { key:'appointmentscheduled',  label:'Qualifizieren',              color:'#c9c9d0' },
+    { key:'presentationscheduled', label:'Erwartet nur Angebot',       color:'#b4b4bd' },
+    { key:'decisionmakerboughtin', label:'Termin gebucht',             color:'#fddc8c' },
+    { key:'5405688014',            label:'Termin stattgefunden',       color:'#fcb618' },
+    { key:'contractsent',          label:'Angebot versendet',          color:'#d99a08' },
+    { key:'5442445521',            label:'Heiss – kurz vor Abschluss', color:'#5cbf94' },
+    { key:'5456011458',            label:'Erneut Kontakt aufnehmen',   color:'#e8c56b' },
+    { key:'5688282303',            label:'Reklamation',                color:'#d14343' },
+    { key:'5676737771',            label:'Nachfass Mail raus',         color:'#a8a8b0' },
+    { key:'closedwon',             label:'Abgeschlossen',              color:'#2e9e6b' },
+    { key:'closedlost',            label:'Verloren',                   color:'#d14343' },
+    { key:'5456024814',            label:'Kein Kontakt / N.I.',        color:'#dcdce1' },
+  ];
+  /* Feste Farbe je Leadquelle - bleibt stabil, auch wenn neue Quellen dazukommen */
+  const LQ_NAMED = {
+    aroundhome: '#e0940a',   // Bernstein (Hausfarbe, groesste Quelle)
+    trustlocal: '#2b7cc4',   // Blau
+    wattfox:    '#2e9e6b',   // Gruen
+    dekosolar:  '#8b5cc4',   // Violett
+    empfehlung: '#0f9b9b',   // Petrol
+    unbekannt:  '#8b8b93',   // Grau
+  };
+  const LQ_PALETTE = ['#c1590f','#d14343','#7a5cd6','#0f9b9b','#2b7cc4','#2e9e6b','#e0940a','#8b8b93'];
+  const stageCfg = k => STAGES.find(s => k === s.key) ?? { label: k, color: '#c9c9d0' };
+
+  let mC, dC, lqC, wlC, allDeals = [], lqKeys = [], currentPage = 1;
+  let rawDeals = [], owners = [], currentOwner = 'all';
+  let wlMode = 'create';   // 'create' = Entstehungsmonat (Kohorte), 'close' = Abschlussmonat
+  let lqMode = 'create', lqMonth = 'all';   // Basis und Zeitraum der Leadquellen-Tabelle
+  let lastStats = null;
+  const MY_OWNER_ID = '90396933';   // Calvin - bekommt ein "DU"-Badge in der Team-Tabelle
+  const OWNER_COLORS = ['#1a1a1f','#fcb618','#2e9e6b','#d99a08','#7a7a85','#c17f3a','#4a7dbf'];
+  const ownerColor = id => id === '__none__' ? '#c9c9d0'
+    : OWNER_COLORS[Math.max(0, owners.findIndex(o => o.id === id)) % OWNER_COLORS.length];
+  const PAGE_SIZE = 20;
+  const lqKey = lq => (lq || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  function lqColor(lq) {
+    const k = lqKey(lq);
+    if (LQ_NAMED[k]) return LQ_NAMED[k];
+    let h = 0;
+    for (let i = 0; i < k.length; i++) h = (h * 31 + k.charCodeAt(i)) >>> 0;
+    return LQ_PALETTE[h % LQ_PALETTE.length];
+  }
+
+  /* Aus einer Grundfarbe die drei Badge-Toene ableiten */
+  function mix(hex, target, amt) {
+    const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+    const [r1, g1, b1] = p(hex), [r2, g2, b2] = p(target);
+    const c = (a, b) => Math.round(a + (b - a) * amt).toString(16).padStart(2, '0');
+    return `#${c(r1, r2)}${c(g1, g2)}${c(b1, b2)}`;
+  }
+  const badgeBg     = c => mix(c, '#ffffff', .86);
+  const badgeBorder = c => mix(c, '#ffffff', .48);
+
+  /* Relative Helligkeit und Kontrastverhaeltnis nach WCAG */
+  function lum(hex) {
+    const v = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
+      .map(x => x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4));
+    return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
+  }
+  const contrast = (a, b) => {
+    const l1 = lum(a), l2 = lum(b);
+    return (Math.max(l1, l2) + .05) / (Math.min(l1, l2) + .05);
+  };
+
+  /* Textton so weit abdunkeln, bis er auf dem Badge sicher lesbar ist */
+  const textCache = {};
+  function badgeText(c) {
+    if (textCache[c]) return textCache[c];
+    const bg = badgeBg(c);
+    let out = mix(c, '#000000', .30);
+    for (let amt = .30; amt <= .82 && contrast(bg, out) < 4.5; amt += .04) {
+      out = mix(c, '#000000', amt);
+    }
+    textCache[c] = out;
+    return out;
+  }
+
+  const badgeStyle = c => `background:${badgeBg(c)};color:${badgeText(c)};border-color:${badgeBorder(c)}`;
+
+  /* Animated counter */
+  function counter(el, target, suffix = '') {
+    const dur = 950, start = performance.now();
+    const tick = now => {
+      const p = Math.min((now - start) / dur, 1);
+      const e = 1 - Math.pow(1 - p, 4);
+      el.textContent = Math.round(target * e) + suffix;
+      if (p < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+
+  /* Fortschrittsleiste unter der Kennzahl */
+  function fillGlowBar(id, pct, color) {
+    setTimeout(() => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.style.width = pct + '%';
+      if (color) el.style.background = color;
+    }, 300);
+  }
+
+  async function load() {
+    document.getElementById('ts').textContent = 'Aktualisiere ...';
+    try {
+      const res = await fetch('/api/hubspot');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      rawDeals = data.deals || [];
+      owners   = data.owners || [];
+      lqKeys   = [...new Set(rawDeals.map(d => d.leadquelle || 'Unbekannt'))].sort();
+      buildOwnerSelect();
+      apply();
+    } catch (e) {
+      document.getElementById('pipeline').innerHTML = `<div class="err">Fehler: ${e.message}</div>`;
+      document.getElementById('ts').textContent = 'Fehler beim Laden';
+    }
+  }
+
+  /* ── Mitarbeiter-Filter ── */
+  function buildOwnerSelect() {
+    const sel = document.getElementById('ownerSelect');
+    if (!owners.some(o => o.id === currentOwner)) currentOwner = 'all';
+    sel.innerHTML = `<option value="all">Alle Mitarbeiter (${rawDeals.length})</option>`
+      + owners.map(o => `<option value="${o.id}">${o.name}${o.archived ? ' (inaktiv)' : ''} (${o.count})</option>`).join('');
+    sel.value = currentOwner;
+    document.getElementById('teamCard').style.display = owners.length > 1 ? '' : 'none';
+  }
+
+  function setOwner(id) {
+    currentOwner = id;
+    document.getElementById('ownerSelect').value = id;
+    apply();
+  }
+
+  function apply() {
+    allDeals = currentOwner === 'all' ? rawDeals : rawDeals.filter(d => d.ownerId === currentOwner);
+
+    const pill = document.getElementById('filterPill');
+    if (currentOwner === 'all') {
+      pill.classList.remove('on');
+    } else {
+      pill.classList.add('on');
+      const o = owners.find(x => x.id === currentOwner);
+      document.getElementById('filterPillText').textContent = `Gefiltert: ${o ? o.name : currentOwner}`;
+    }
+
+    render(aggregate(allDeals));
+  }
+
+  /* ── Kennzahlen aus der (gefilterten) Deal-Liste berechnen ── */
+  function aggregate(deals) {
+    const byStage = {}, byMonth = {}, byLeadquelle = {}, byCloseMonth = {}, byCreateMonth = {};
+    let closedOhneDatum = 0, createOhneDatum = 0;
+    const daysToClose = [];
+
+    deals.forEach(d => {
+      byStage[d.stage] = (byStage[d.stage] || 0) + 1;
+      const lq = d.leadquelle || 'Unbekannt';
+      byLeadquelle[lq] = (byLeadquelle[lq] || 0) + 1;
+
+      if (d.createdate) {
+        const m = d.createdate.substring(0, 7);
+        byMonth[m] = (byMonth[m] || 0) + 1;
+      }
+
+      const decided = d.stage === 'closedwon' || d.stage === 'closedlost';
+
+      /* Variante A: Zuordnung nach Abschlussdatum */
+      if (decided) {
+        if (d.closedate) {
+          const cm = d.closedate.substring(0, 7);
+          if (!byCloseMonth[cm]) byCloseMonth[cm] = { won: 0, lost: 0 };
+          if (d.stage === 'closedwon') byCloseMonth[cm].won++; else byCloseMonth[cm].lost++;
+        } else {
+          closedOhneDatum++;
+        }
+      }
+
+      /* Variante B: Zuordnung nach Entstehungsmonat (Kohorte) - inkl. noch offener Deals */
+      if (d.createdate) {
+        const em = d.createdate.substring(0, 7);
+        if (!byCreateMonth[em]) byCreateMonth[em] = { won: 0, lost: 0, open: 0 };
+        if (d.stage === 'closedwon')       byCreateMonth[em].won++;
+        else if (d.stage === 'closedlost') byCreateMonth[em].lost++;
+        else                               byCreateMonth[em].open++;
+      } else if (decided) {
+        createOhneDatum++;
+      }
+
+      if (d.stage === 'closedwon' && d.createdate && d.closedate) {
+        const days = Math.round((new Date(d.closedate) - new Date(d.createdate)) / 86400000);
+        if (days >= 0) daysToClose.push(days);
+      }
+    });
+
+    const avgDays = daysToClose.length
+      ? Math.round(daysToClose.reduce((a, b) => a + b, 0) / daysToClose.length) : null;
+
+    return { byStage, byMonth, byCloseMonth, byCreateMonth, closedOhneDatum, createOhneDatum,
+             byLeadquelle, total: deals.length, avgDays };
+  }
+
+  function render(stats) {
+    lastStats = stats;
+    const { byStage, byMonth, byLeadquelle, total, avgDays } = stats;
+    const won    = byStage['closedwon']    || 0;
+    const lost   = byStage['closedlost']   || 0;
+    const offers = byStage['contractsent'] || 0;
+    const hot    = byStage['5442445521']   || 0;
+    const decided = won + lost;
+    const rate   = decided > 0 ? Math.round(won / decided * 100) : 0;
+
+    /* KPI numbers */
+    counter(document.getElementById('k-total'),  total);
+    counter(document.getElementById('k-won'),    won);
+    counter(document.getElementById('k-offers'), offers);
+    counter(document.getElementById('k-hot'),    hot);
+    counter(document.getElementById('k-rate'),   rate, '%');
+
+    const rColor = quoteColor(rate);
+    document.getElementById('k-rate').style.color = rColor;
+
+    document.getElementById('d-won').textContent  = `von ${total} Leads`;
+    document.getElementById('d-rate').textContent = `${won} von ${decided} entschieden`;
+    const oLabel = currentOwner === 'all'
+      ? 'Alle Mitarbeiter'
+      : (owners.find(o => o.id === currentOwner)?.name || currentOwner);
+    document.getElementById('ts').textContent = `Live · ${oLabel} · ` + new Date().toLocaleString('de-DE');
+
+
+    /* Fortschrittsleisten */
+    fillGlowBar('gb-total',  100, C.amber);
+    fillGlowBar('gb-rate',   rate, rColor);
+    fillGlowBar('gb-won',    total > 0 ? Math.round(won / total * 100) : 0, C.green);
+    fillGlowBar('gb-hot',    total > 0 ? Math.round(hot / total * 100) : 0, C.green);
+    fillGlowBar('gb-offers', total > 0 ? Math.round(offers / total * 100) : 0, C.amberDark);
+
+    /* Pipeline */
+    const sorted = Object.entries(byStage).sort((a, b) => b[1] - a[1]);
+    const maxV = Math.max(...sorted.map(([, v]) => v), 1);
+    const pl = document.getElementById('pipeline');
+    pl.innerHTML = '';
+    sorted.forEach(([k, v], i) => {
+      const c = stageCfg(k), pct = Math.max(2, Math.round(v / maxV * 100));
+      const row = document.createElement('div');
+      row.className = 'pr';
+      row.innerHTML = `
+        <div class="pr-label" title="${c.label}">${c.label}</div>
+        <div class="pr-track"><div class="pr-bar" id="pb${i}" style="background:${c.color}"></div></div>
+        <div class="pr-count">${v}</div>`;
+      pl.appendChild(row);
+      setTimeout(() => { document.getElementById(`pb${i}`).style.width = pct + '%'; }, 120 + i * 60);
+    });
+
+    /* Monthly chart */
+    const months = Object.entries(byMonth).sort(([a], [b]) => a.localeCompare(b)).filter(([, v]) => v > 0);
+    if (mC) mC.destroy();
+    mC = new Chart(document.getElementById('cMonthly'), {
+      type: 'bar',
+      data: {
+        labels: months.map(([m]) => new Date(m + '-01').toLocaleDateString('de-DE', { month: 'short', year: '2-digit' })),
+        datasets: [{
+          label: 'Deals', data: months.map(([, v]) => v),
+          backgroundColor: C.amber, hoverBackgroundColor: C.amberDark,
+          borderWidth: 0, borderRadius: 2, borderSkipped: false, maxBarThickness: 42,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        animation: { duration: 800, easing: 'easeOutQuart' },
+        plugins: { legend: { display: false }, tooltip: TIP },
+        scales: {
+          y: { beginAtZero: true, border: { display: false }, grid: { color: C.line }, ticks: { precision: 0, padding: 8 } },
+          x: { border: { color: C.line }, grid: { display: false }, ticks: { padding: 6 } }
+        }
+      }
+    });
+
+    /* Donut – Status */
+    const inPipe = total - won - lost - (byStage['5456024814'] || 0);
+    const dd = [
+      { label: 'Abgeschlossen', value: won,                        color: C.green },
+      { label: 'In Pipeline',   value: Math.max(0, inPipe),        color: C.amber },
+      { label: 'Verloren',      value: lost,                       color: C.red },
+      { label: 'Kein Kontakt',  value: byStage['5456024814'] || 0, color: C.greyLight },
+    ].filter(d => d.value > 0);
+    if (dC) dC.destroy();
+    dC = new Chart(document.getElementById('cDonut'), {
+      type: 'doughnut',
+      data: { labels: dd.map(d => d.label), datasets: [{ data: dd.map(d => d.value), backgroundColor: dd.map(d => d.color), borderWidth: 2, borderColor: '#fff', hoverOffset: 6 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '70%',
+        animation: { duration: 800, easing: 'easeOutQuart', animateRotate: true },
+        plugins: {
+          legend: { position: 'bottom', labels: { padding: 14, usePointStyle: true, pointStyle: 'circle', boxWidth: 7, boxHeight: 7, color: '#3f3f46' } },
+          tooltip: TIP
+        }
+      }
+    });
+
+    /* Donut – Leadquelle */
+    const lqE = Object.entries(byLeadquelle).sort((a, b) => b[1] - a[1]);
+    if (lqC) lqC.destroy();
+    lqC = new Chart(document.getElementById('cLeadquelle'), {
+      type: 'doughnut',
+      data: { labels: lqE.map(([k]) => k), datasets: [{ data: lqE.map(([, v]) => v), backgroundColor: lqE.map(([k]) => lqColor(k)), borderWidth: 2, borderColor: '#fff', hoverOffset: 6 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '70%',
+        animation: { duration: 800, easing: 'easeOutQuart', animateRotate: true },
+        plugins: {
+          legend: { position: 'bottom', labels: { padding: 14, usePointStyle: true, pointStyle: 'circle', boxWidth: 7, boxHeight: 7, color: '#3f3f46' } },
+          tooltip: TIP
+        }
+      }
+    });
+
+    renderLeadquelle();
+
+    renderWinLoss();
+    renderTeam();
+
+    currentPage = 1;
+    renderTable();
+  }
+
+  /* ── Abschlussquote nach Leadquelle ──
+     'create' = Deal zählt in den Monat, in dem er angelegt wurde
+     'close'  = Deal zählt in den Monat, in dem er gewonnen/verloren wurde   */
+  const monthLabel = m => new Date(m + '-01').toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+
+  function setLqMode(mode) {
+    lqMode = mode;
+    lqMonth = 'all';
+    document.getElementById('lqBtnCreate').classList.toggle('on', mode === 'create');
+    document.getElementById('lqBtnClose').classList.toggle('on',  mode === 'close');
+    renderLeadquelle();
+  }
+
+  function setLqMonth(m) { lqMonth = m; renderLeadquelle(); }
+
+  function renderLeadquelle() {
+    const cohort = lqMode === 'create';
+
+    /* Grundmenge: im Kohortenmodus alle Deals, sonst nur entschiedene mit Abschlussdatum */
+    const pool = allDeals.filter(d => cohort
+      ? !!d.createdate
+      : ((d.stage === 'closedwon' || d.stage === 'closedlost') && !!d.closedate));
+    const monthOf = d => (cohort ? d.createdate : d.closedate).substring(0, 7);
+
+    /* Monatsliste aufbauen, Auswahl bei Bedarf zurücksetzen */
+    const monthsAvail = [...new Set(pool.map(monthOf))].sort().reverse();
+    if (lqMonth !== 'all' && !monthsAvail.includes(lqMonth)) lqMonth = 'all';
+    const sel = document.getElementById('lqMonthSel');
+    sel.innerHTML = `<option value="all">Alle Monate (${pool.length})</option>`
+      + monthsAvail.map(m => {
+          const n = pool.filter(d => monthOf(d) === m).length;
+          return `<option value="${m}">${monthLabel(m)} (${n})</option>`;
+        }).join('');
+    sel.value = lqMonth;
+
+    const rows = lqMonth === 'all' ? pool : pool.filter(d => monthOf(d) === lqMonth);
+
+    /* Kennzahlen je Quelle */
+    const stats = {};
+    rows.forEach(d => {
+      const lq = d.leadquelle || 'Unbekannt';
+      if (!stats[lq]) stats[lq] = { total: 0, won: 0, lost: 0, open: 0 };
+      stats[lq].total++;
+      if (d.stage === 'closedwon')       stats[lq].won++;
+      else if (d.stage === 'closedlost') stats[lq].lost++;
+      else                               stats[lq].open++;
+    });
+
+    /* Kopfzeile je Modus */
+    document.getElementById('lqHead').innerHTML = cohort
+      ? '<tr><th>Leadquelle</th><th>Leads</th><th>Offen</th><th>Gewonnen</th><th>Verloren</th><th>Quote</th></tr>'
+      : '<tr><th>Leadquelle</th><th>Entschieden</th><th>Gewonnen</th><th>Verloren</th><th>Quote</th></tr>';
+    const cols = cohort ? 6 : 5;
+
+    const list = Object.entries(stats)
+      .filter(([lq]) => lq !== 'Unbekannt')
+      .sort((a, b) => b[1].total - a[1].total);
+
+    const body = document.getElementById('lqBody');
+    body.innerHTML = list.length ? list.map(([lq, st], idx) => {
+      const dec = st.won + st.lost;
+      const q   = dec > 0 ? Math.round(st.won / dec * 100) : null;
+      const col = q === null ? C.grey : quoteColor(q);
+      const lqc = lqColor(lq);
+      return `<tr>
+        <td><span class="lq-dot" style="background:${lqc}"></span><b style="font-weight:600">${lq}</b></td>
+        <td>${st.total}</td>
+        ${cohort ? `<td style="color:${st.open ? C.amberDark : C.greyLight};font-weight:600">${st.open}</td>` : ''}
+        <td style="color:${st.won  ? C.green : C.greyLight};font-weight:600">${st.won}</td>
+        <td style="color:${st.lost ? C.red   : C.greyLight};font-weight:600">${st.lost}</td>
+        <td><div class="rate-wrap">
+          <div class="rate-track"><div class="rate-fill" id="rf${idx}" style="background:${col}"></div></div>
+          <span class="rate-pct" style="color:${col}">${q !== null ? q + '%' : '—'}</span>
+        </div></td></tr>`;
+    }).join('') : `<tr><td colspan="${cols}" class="msg">Keine Daten für diesen Zeitraum</td></tr>`;
+
+    list.forEach(([, st], idx) => {
+      const dec = st.won + st.lost, q = dec > 0 ? Math.round(st.won / dec * 100) : 0;
+      setTimeout(() => {
+        const el = document.getElementById('rf' + idx);
+        if (el) el.style.width = q + '%';
+      }, 300 + idx * 70);
+    });
+
+    const zeitraum = lqMonth === 'all' ? 'alle Monate' : monthLabel(lqMonth);
+    document.getElementById('lqHint').textContent = cohort
+      ? `Entstehungsmonat, ${zeitraum}: Gezählt werden alle Leads, die in diesem Zeitraum angelegt wurden — unabhängig davon, wann sie entschieden wurden. Offene Deals sind in "Leads" enthalten, aber nicht in der Quote.`
+      : `Abschlussmonat, ${zeitraum}: Gezählt werden nur Deals, die in diesem Zeitraum auf gewonnen oder verloren gesetzt wurden. Noch offene Deals kommen hier nicht vor.`;
+  }
+
+  /* ── Mitarbeiter-Übersicht (immer alle, unabhängig vom Filter) ── */
+  function renderTeam() {
+    const body = document.getElementById('teamBody');
+    const stats = {};
+    rawDeals.forEach(d => {
+      const id = d.ownerId;
+      if (!stats[id]) stats[id] = { name: d.ownerName, total: 0, won: 0, lost: 0, open: 0 };
+      stats[id].total++;
+      if (d.stage === 'closedwon')       stats[id].won++;
+      else if (d.stage === 'closedlost') stats[id].lost++;
+      else                               stats[id].open++;
+    });
+
+    const rows = Object.entries(stats).sort((a, b) => b[1].total - a[1].total);
+    body.innerHTML = rows.length ? rows.map(([id, st], idx) => {
+      const dec = st.won + st.lost;
+      const q   = dec > 0 ? Math.round(st.won / dec * 100) : null;
+      const col = q === null ? C.grey : quoteColor(q);
+      const oc  = ownerColor(id);
+      const active = id === currentOwner ? ' row-active' : '';
+      return `<tr class="row-click${active}" onclick="setOwner('${id === currentOwner ? 'all' : id}')" title="Klicken zum Filtern">
+        <td><span class="lq-dot" style="background:${oc}"></span><b style="font-weight:600">${st.name}</b>${id === MY_OWNER_ID ? '<span class="team-me">DU</span>' : ''}</td>
+        <td>${st.total}</td>
+        <td style="color:${st.open ? C.amberDark : C.greyLight};font-weight:600">${st.open}</td>
+        <td style="color:${st.won  ? C.green     : C.greyLight};font-weight:600">${st.won}</td>
+        <td style="color:${st.lost ? C.red       : C.greyLight};font-weight:600">${st.lost}</td>
+        <td><div class="rate-wrap">
+          <div class="rate-track"><div class="rate-fill" id="tf${idx}" style="background:${col}"></div></div>
+          <span class="rate-pct" style="color:${col}">${q !== null ? q + '%' : '—'}</span>
+        </div></td></tr>`;
+    }).join('') : '<tr><td colspan="6" class="msg">Keine Daten</td></tr>';
+
+    rows.forEach(([, st], idx) => {
+      const dec = st.won + st.lost, q = dec > 0 ? Math.round(st.won / dec * 100) : 0;
+      setTimeout(() => {
+        const el = document.getElementById('tf' + idx);
+        if (el) el.style.width = q + '%';
+      }, 500 + idx * 80);
+    });
+  }
+
+  /* ── Gewinn/Verlust pro Monat ──
+     'create' = Deal zählt in den Monat, in dem er angelegt wurde (Kohorte)
+     'close'  = Deal zählt in den Monat, in dem er gewonnen/verloren wurde        */
+  function setWlMode(mode) {
+    wlMode = mode;
+    document.getElementById('wlBtnCreate').classList.toggle('on', mode === 'create');
+    document.getElementById('wlBtnClose').classList.toggle('on',  mode === 'close');
+    renderWinLoss();
+  }
+
+  function renderWinLoss() {
+    if (!lastStats) return;
+    const byCreate  = lastStats.byCreateMonth || {};
+    const byClose   = lastStats.byCloseMonth  || {};
+    const cohort    = wlMode === 'create';
+    const source    = cohort ? byCreate : byClose;
+    const ohneDatum = cohort ? (lastStats.createOhneDatum || 0) : (lastStats.closedOhneDatum || 0);
+    const keys = Object.keys(source).sort();
+    document.querySelectorAll('.wl-stat-label')[0].textContent = cohort ? 'Laufender Jahrgang' : 'Laufender Monat';
+    document.querySelectorAll('.wl-stat-label')[1].textContent = cohort ? 'Vormonats-Jahrgang' : 'Vormonat';
+
+    const setStat = (id, subId, q, won, lost) => {
+      const el = document.getElementById(id);
+      if (q === null) {
+        el.textContent = '—'; el.style.color = C.grey;
+        document.getElementById(subId).textContent = 'keine Abschlüsse';
+        return;
+      }
+      el.textContent = q + '%'; el.style.color = quoteColor(q);
+      document.getElementById(subId).textContent = `${won} gewonnen · ${lost} verloren`;
+    };
+
+    if (!keys.length) {
+      setStat('wl-cur', 'wl-cur-sub', null);
+      setStat('wl-prev', 'wl-prev-sub', null);
+      setStat('wl-avg', 'wl-avg-sub', null);
+      document.getElementById('wl-hint').textContent = 'Noch keine entschiedenen Deals mit Abschlussdatum.';
+      if (wlC) { wlC.destroy(); wlC = null; }
+      return;
+    }
+
+    /* Lücken-Monate auffüllen, damit die Zeitachse durchgehend ist */
+    const months = [];
+    const [sy, sm] = keys[0].split('-').map(Number);
+    const now = new Date();
+    let cur = new Date(sy, sm - 1, 1);
+    const end = new Date(now.getFullYear(), now.getMonth(), 1);
+    while (cur <= end) {
+      months.push(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}`);
+      cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+    }
+
+    const wonArr  = months.map(m => source[m]?.won  || 0);
+    const lostArr = months.map(m => source[m]?.lost || 0);
+    const openArr = months.map(m => source[m]?.open || 0);
+    const rateArr = months.map((m, i) => {
+      const dec = wonArr[i] + lostArr[i];
+      return dec > 0 ? Math.round(wonArr[i] / dec * 100) : null;
+    });
+
+    /* Kennzahlen oben rechts */
+    const iCur = months.length - 1, iPrev = months.length - 2;
+    setStat('wl-cur', 'wl-cur-sub', rateArr[iCur], wonArr[iCur], lostArr[iCur]);
+    if (iPrev >= 0) setStat('wl-prev', 'wl-prev-sub', rateArr[iPrev], wonArr[iPrev], lostArr[iPrev]);
+    else setStat('wl-prev', 'wl-prev-sub', null);
+
+    /* Ø letzte 6 Monate: aggregiert, nicht Mittel der Monatsquoten */
+    const from = Math.max(0, months.length - 6);
+    const w6 = wonArr.slice(from).reduce((a, b) => a + b, 0);
+    const l6 = lostArr.slice(from).reduce((a, b) => a + b, 0);
+    setStat('wl-avg', 'wl-avg-sub', (w6 + l6) > 0 ? Math.round(w6 / (w6 + l6) * 100) : null, w6, l6);
+
+    document.getElementById('wl-hint').textContent = cohort
+      ? 'Zuordnung nach Entstehungsmonat: Jeder Deal zählt in den Monat, in dem er angelegt wurde — unabhängig davon, wann er gewonnen oder verloren wurde. Die Quote der jüngsten Monate ist noch nicht belastbar, solange dort viele Deals offen sind.'
+        + (ohneDatum > 0 ? ` · ${ohneDatum} entschiedene Deal(s) ohne Anlagedatum sind nicht enthalten.` : '')
+      : 'Zuordnung nach Abschlussdatum: Jeder Deal zählt in den Monat, in dem er auf gewonnen oder verloren gesetzt wurde.'
+        + (ohneDatum > 0 ? ` · ${ohneDatum} entschiedene Deal(s) ohne Abschlussdatum sind nicht enthalten.` : '');
+
+    const labels = months.map(m => new Date(m + '-01').toLocaleDateString('de-DE', { month: 'short', year: '2-digit' }));
+
+    if (wlC) wlC.destroy();
+    wlC = new Chart(document.getElementById('cWinLoss'), {
+      data: {
+        labels,
+        datasets: [
+          {
+            type: 'bar', label: 'Gewonnen', data: wonArr, yAxisID: 'y',
+            backgroundColor: C.green, hoverBackgroundColor: '#25845a',
+            borderRadius: 2, borderSkipped: false, stack: 'wl', order: 2, maxBarThickness: 40,
+          },
+          {
+            type: 'bar', label: 'Verloren', data: lostArr, yAxisID: 'y',
+            backgroundColor: '#eab8b8', hoverBackgroundColor: C.red,
+            borderRadius: 2, borderSkipped: false, stack: 'wl', order: 2, maxBarThickness: 40,
+          },
+          ...(cohort ? [{
+            type: 'bar', label: 'Noch offen', data: openArr, yAxisID: 'y',
+            backgroundColor: '#e4e4e9', hoverBackgroundColor: C.greyLight,
+            borderRadius: 2, borderSkipped: false, stack: 'wl', order: 2, maxBarThickness: 40,
+          }] : []),
+          {
+            type: 'line', label: 'Gewinnquote', data: rateArr, yAxisID: 'y1',
+            borderColor: C.ink, backgroundColor: C.ink,
+            borderWidth: 2, tension: .3, spanGaps: true,
+            pointRadius: 3.5, pointHoverRadius: 6,
+            pointBackgroundColor: '#fff', pointBorderColor: C.ink, pointBorderWidth: 2,
+            order: 1,
+          },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        animation: { duration: 800, easing: 'easeOutQuart' },
+        plugins: {
+          legend: { position: 'bottom', labels: { padding: 16, usePointStyle: true, pointStyle: 'circle', boxWidth: 7, boxHeight: 7, color: '#3f3f46' } },
+          tooltip: {
+            ...TIP,
+            callbacks: {
+              label: ctx => ctx.dataset.label === 'Gewinnquote'
+                ? (ctx.parsed.y === null ? 'Gewinnquote: —' : `Gewinnquote: ${ctx.parsed.y}%`)
+                : `${ctx.dataset.label}: ${ctx.parsed.y}`,
+              afterBody: items => {
+                const i = items[0].dataIndex, dec = wonArr[i] + lostArr[i];
+                if (!cohort) return dec > 0 ? `Entschieden: ${dec}` : '';
+                const ges = dec + openArr[i];
+                return ges > 0 ? `Leads gesamt: ${ges} · entschieden: ${dec}` : '';
+              }
+            }
+          }
+        },
+        scales: {
+          y:  { stacked: true, beginAtZero: true, position: 'left',
+                border: { display: false }, grid: { color: C.line },
+                ticks: { precision: 0, padding: 8 },
+                title: { display: true, text: 'Deals', color: '#78787f', font: { size: 10 } } },
+          y1: { beginAtZero: true, max: 100, position: 'right',
+                border: { display: false }, grid: { display: false },
+                ticks: { stepSize: 25, callback: v => v + '%', padding: 8, color: '#3f3f46' },
+                title: { display: true, text: 'Quote', color: '#3f3f46', font: { size: 10 } } },
+          x:  { stacked: true, border: { color: C.line }, grid: { display: false }, ticks: { padding: 6 } }
+        }
+      }
+    });
+  }
+
+  function renderTable() {
+    const q = (document.getElementById('search').value || '').toLowerCase();
+    const filtered = allDeals
+      .filter(d => (d.name || '').toLowerCase().includes(q)
+                || (d.leadquelle || '').toLowerCase().includes(q)
+                || (d.ownerName  || '').toLowerCase().includes(q))
+      .sort((a, b) => (b.createdate || '').localeCompare(a.createdate || ''));
+    const pages = Math.ceil(filtered.length / PAGE_SIZE) || 1;
+    currentPage = Math.min(currentPage, pages);
+    const slice = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+    document.getElementById('tableBody').innerHTML = slice.length
+      ? slice.map(d => {
+          const c = stageCfg(d.stage), lqc = lqColor(d.leadquelle);
+          const date = d.createdate ? new Date(d.createdate).toLocaleDateString('de-DE') : '—';
+          const noteCell = d.hasNote
+            ? `<span title="Hat Notizen" style="color:${C.green};font-weight:600">✓</span>`
+            : `<span style="color:#c9c9d0">—</span>`;
+          const lostCell = d.lostReason
+            ? `<span class="badge" style="background:var(--red-soft);color:#9c2b2b;border-color:#f0c4c4;max-width:180px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle" title="${d.lostReason}">${d.lostReason}</span>`
+            : `<span style="color:#c9c9d0">—</span>`;
+          const oc = ownerColor(d.ownerId);
+          return `<tr>
+            <td style="font-weight:500">${d.name}</td>
+            <td><span style="color:var(--ink-soft)"><span class="lq-dot" style="background:${oc}"></span>${d.ownerName}</span></td>
+            <td><span class="badge" style="${badgeStyle(lqc)}">${d.leadquelle}</span></td>
+            <td><span class="badge" style="${badgeStyle(c.color)}">${c.label}</span></td>
+            <td style="color:var(--muted)">${date}</td>
+            <td>${noteCell}</td>
+            <td>${lostCell}</td></tr>`;
+        }).join('')
+      : '<tr><td colspan="7" class="msg">Keine Ergebnisse</td></tr>';
+    document.getElementById('pageInfo').textContent = `${filtered.length} Einträge · Seite ${currentPage} von ${pages}`;
+    document.getElementById('btnPrev').disabled = currentPage <= 1;
+    document.getElementById('btnNext').disabled = currentPage >= pages;
+  }
+
+  function changePage(dir) { currentPage += dir; renderTable(); }
+  load();
+</script>
+</body>
+</html>
