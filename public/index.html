@@ -213,6 +213,60 @@
     .page-btns button:hover:not(:disabled) { border-color: var(--amber); }
     .page-btns button:disabled { opacity: .35; cursor: default; }
 
+    /* ─────────── Notizen ─────────── */
+    .note-btn {
+      background: var(--card); border: 1px solid var(--line);
+      padding: 4px 10px; font-size: 11px; font-weight: 600; color: var(--ink-soft);
+      font-family: inherit; cursor: pointer; white-space: nowrap;
+      transition: background .18s, border-color .18s;
+    }
+    .note-btn:hover { background: var(--amber-soft); border-color: var(--amber); }
+    .note-btn .cnt { color: var(--muted); font-weight: 500; margin-left: 4px; }
+
+    .modal-back {
+      position: fixed; inset: 0; background: rgba(0,0,0,.45);
+      display: none; align-items: center; justify-content: center;
+      z-index: 50; padding: 24px;
+    }
+    .modal-back.on { display: flex; }
+    .modal {
+      background: var(--card); border: 1px solid var(--line);
+      width: 100%; max-width: 780px; max-height: 86vh;
+      display: flex; flex-direction: column; box-shadow: 0 12px 48px rgba(0,0,0,.18);
+    }
+    .modal-head {
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+      padding: 20px 24px; border-bottom: 1px solid var(--line); flex-shrink: 0;
+    }
+    .modal-title { font-size: 16px; font-weight: 600; letter-spacing: -.01em; }
+    .modal-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .modal-close {
+      background: none; border: none; font-size: 24px; line-height: 1;
+      color: var(--muted); cursor: pointer; font-family: inherit; padding: 0 2px;
+    }
+    .modal-close:hover { color: var(--ink); }
+    .modal-body { padding: 8px 24px 24px; overflow-y: auto; }
+
+    .note {
+      border-bottom: 1px solid var(--line-soft); padding: 18px 0;
+    }
+    .note:last-child { border-bottom: none; }
+    .note-meta {
+      font-size: 10px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .08em; margin-bottom: 10px;
+    }
+    .note-body { font-size: 13px; color: var(--ink-soft); line-height: 1.65; overflow-wrap: anywhere; }
+    .note-body p { margin: 0 0 9px; }
+    .note-body p:last-child { margin-bottom: 0; }
+    .note-body ul, .note-body ol { margin: 0 0 9px 20px; }
+    .note-body img {
+      max-width: 100%; height: auto; display: block;
+      margin: 12px 0; border: 1px solid var(--line);
+    }
+    .note-body a { color: #1e5789; }
+    .note-body table { margin: 10px 0; font-size: 12px; }
+    .note-body td, .note-body th { border: 1px solid var(--line); padding: 6px 9px; }
+
     .msg { text-align: center; color: var(--muted); font-size: 13px; padding: 26px 0; }
     .err { background: var(--red-soft); border: 1px solid #f0c4c4; padding: 14px; color: #9c2b2b; font-size: 13px; }
 
@@ -396,6 +450,19 @@
 
   <div class="footnote">Volta Energiesysteme GmbH &middot; Interne Auswertung aus HubSpot</div>
 
+</div>
+
+<div class="modal-back" id="noteModal" onclick="if(event.target===this) closeNotes()">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="noteTitle">Notizen</div>
+        <div class="modal-sub" id="noteSub"></div>
+      </div>
+      <button class="modal-close" onclick="closeNotes()" title="Schliessen">&times;</button>
+    </div>
+    <div class="modal-body" id="noteBody"></div>
+  </div>
 </div>
 
 <script>
@@ -1040,7 +1107,7 @@
           const c = stageCfg(d.stage), lqc = lqColor(d.leadquelle);
           const date = d.createdate ? new Date(d.createdate).toLocaleDateString('de-DE') : '—';
           const noteCell = d.hasNote
-            ? `<span title="Hat Notizen" style="color:${C.green};font-weight:600">✓</span>`
+            ? `<button class="note-btn" onclick="openNotes('${d.id}')">Ansehen${d.noteCount > 1 ? `<span class="cnt">${d.noteCount}</span>` : ''}</button>`
             : `<span style="color:#c9c9d0">—</span>`;
           const lostCell = d.lostReason
             ? `<span class="badge" style="background:var(--red-soft);color:#9c2b2b;border-color:#f0c4c4;max-width:180px;display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle" title="${d.lostReason}">${d.lostReason}</span>`
@@ -1062,6 +1129,94 @@
   }
 
   function changePage(dir) { currentPage += dir; renderTable(); }
+
+  /* ── Notizen ── */
+  const noteCache = {};
+
+  /* HubSpot-Notizen sind HTML. Nur unbedenkliche Tags durchlassen. */
+  const ALLOWED_TAGS = new Set(['P','BR','B','STRONG','I','EM','U','S','A','UL','OL','LI','DIV','SPAN',
+                                'H1','H2','H3','H4','H5','H6','BLOCKQUOTE','PRE','CODE','HR','IMG',
+                                'TABLE','THEAD','TBODY','TR','TD','TH']);
+  const ALLOWED_ATTR = { A: ['href', 'title'], IMG: ['src', 'alt', 'width', 'height'] };
+  /* Diese Tags samt Inhalt verwerfen - ihr Textinhalt ist Code, kein Notiztext */
+  const DROP_TAGS = new Set(['SCRIPT','STYLE','IFRAME','OBJECT','EMBED','NOSCRIPT','TEMPLATE','LINK','META','SVG','FORM','INPUT','BUTTON']);
+
+  function sanitize(html) {
+    const doc = new DOMParser().parseFromString(html || '', 'text/html');
+    const walk = node => {
+      [...node.children].forEach(el => {
+        if (DROP_TAGS.has(el.tagName)) { el.remove(); return; }
+        if (!ALLOWED_TAGS.has(el.tagName)) {
+          el.replaceWith(document.createTextNode(el.textContent || ''));
+          return;
+        }
+        const keep = ALLOWED_ATTR[el.tagName] || [];
+        [...el.attributes].forEach(a => {
+          if (!keep.includes(a.name.toLowerCase())) el.removeAttribute(a.name);
+        });
+        const urlAttr = el.tagName === 'A' ? 'href' : el.tagName === 'IMG' ? 'src' : null;
+        if (urlAttr) {
+          const url = el.getAttribute(urlAttr);
+          if (url && !/^https?:\/\//i.test(url)) el.removeAttribute(urlAttr);
+        }
+        if (el.tagName === 'A') { el.setAttribute('target', '_blank'); el.setAttribute('rel', 'noopener noreferrer'); }
+        walk(el);
+      });
+    };
+    walk(doc.body);
+    return doc.body.innerHTML;
+  }
+
+  async function openNotes(dealId) {
+    const deal = rawDeals.find(d => d.id === dealId);
+    if (!deal) return;
+
+    document.getElementById('noteTitle').textContent = deal.name;
+    document.getElementById('noteSub').textContent =
+      `${deal.ownerName} \u00b7 ${deal.leadquelle} \u00b7 ${stageCfg(deal.stage).label}`;
+    document.getElementById('noteBody').innerHTML = '<div class="msg">Lade Notizen ...</div>';
+    document.getElementById('noteModal').classList.add('on');
+    document.body.style.overflow = 'hidden';
+
+    try {
+      if (!noteCache[dealId]) {
+        const r = await fetch(`/api/hubspot?dealId=${encodeURIComponent(dealId)}`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const d = await r.json();
+        if (d.error) throw new Error(d.error);
+        noteCache[dealId] = d.notes || [];
+      }
+      renderNotes(noteCache[dealId]);
+    } catch (e) {
+      document.getElementById('noteBody').innerHTML =
+        `<div class="err" style="margin-top:16px">Notizen konnten nicht geladen werden: ${e.message}</div>`;
+    }
+  }
+
+  function renderNotes(notes) {
+    const el = document.getElementById('noteBody');
+    if (!notes.length) { el.innerHTML = '<div class="msg">Keine Notizen vorhanden</div>'; return; }
+    el.innerHTML = notes.map(n => {
+      const dt = n.ts
+        ? new Date(n.ts).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+        : 'ohne Datum';
+      const who = n.ownerId ? (owners.find(o => o.id === n.ownerId)?.name || '') : '';
+      const body = sanitize(n.body);
+      return `<div class="note">
+        <div class="note-meta">${dt}${who ? ' \u00b7 ' + who : ''}</div>
+        <div class="note-body">${body || '<em style="color:#a8a8b0">Leere Notiz</em>'}</div>
+      </div>`;
+    }).join('');
+    el.scrollTop = 0;
+  }
+
+  function closeNotes() {
+    document.getElementById('noteModal').classList.remove('on');
+    document.body.style.overflow = '';
+  }
+
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeNotes(); });
+
   load();
 </script>
 </body>
