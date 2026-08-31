@@ -433,6 +433,7 @@
       <thead><tr><th>Mitarbeiter</th><th>Leads</th><th>Offen</th><th>Gewonnen</th><th>Verloren</th><th>Quote</th></tr></thead>
       <tbody id="teamBody"><tr><td colspan="6" class="msg">Lade ...</td></tr></tbody>
     </table>
+    <div class="wl-hint" id="teamNote"></div>
   </div>
 
   <div class="card list-card">
@@ -534,9 +535,29 @@
   let listLq = 'all', listStage = 'all';     // Filter der Kundenliste
   let lastStats = null;
   const MY_OWNER_ID = '90396933';   // Calvin - bekommt ein "DU"-Badge in der Team-Tabelle
-  const OWNER_COLORS = ['#1a1a1f','#fcb618','#2e9e6b','#d99a08','#7a7a85','#c17f3a','#4a7dbf'];
-  const ownerColor = id => id === '__none__' ? '#c9c9d0'
-    : OWNER_COLORS[Math.max(0, owners.findIndex(o => o.id === id)) % OWNER_COLORS.length];
+  const OWNER_COLORS = ['#1a1a1f','#fcb618','#2e9e6b','#4a7dbf','#c17f3a','#8b5cc4',
+                        '#0f9b9b','#d14343','#7a7a85','#c98a0a'];
+  /* Farbe haengt an der Owner-ID statt an der Rangfolge, damit sie sich nicht
+     verschiebt, wenn jemand mehr Leads bekommt. Kollisionen werden aufgeloest,
+     damit keine zwei Mitarbeiter dieselbe Farbe tragen. */
+  let ownerColorMap = {};
+  function buildOwnerColors() {
+    ownerColorMap = { __none__: '#c9c9d0' };
+    const taken = new Set();
+    [...owners].filter(o => o.id !== '__none__')
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .forEach(o => {
+        let h = 0;
+        for (let i = 0; i < o.id.length; i++) h = (h * 31 + o.id.charCodeAt(i)) >>> 0;
+        let slot = h % OWNER_COLORS.length;
+        for (let k = 0; k < OWNER_COLORS.length && taken.has(slot); k++) {
+          slot = (slot + 1) % OWNER_COLORS.length;
+        }
+        taken.add(slot);
+        ownerColorMap[o.id] = OWNER_COLORS[slot];
+      });
+  }
+  const ownerColor = id => ownerColorMap[id] || '#c9c9d0';
   const PAGE_SIZE = 20;
   const lqKey = lq => (lq || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   function lqColor(lq) {
@@ -625,12 +646,16 @@
 
   /* ── Mitarbeiter-Filter ── */
   function buildOwnerSelect() {
+    buildOwnerColors();
     const sel = document.getElementById('ownerSelect');
     if (!owners.some(o => o.id === currentOwner)) currentOwner = 'all';
     sel.innerHTML = `<option value="all">Alle Mitarbeiter (${rawDeals.length})</option>`
       + owners.map(o => `<option value="${o.id}">${o.name}${o.archived ? ' (inaktiv)' : ''} (${o.count})</option>`).join('');
     sel.value = currentOwner;
     document.getElementById('teamCard').style.display = owners.length > 1 ? '' : 'none';
+    const ohneLeads = owners.filter(o => o.count === 0).length;
+    document.getElementById('teamNote').textContent = ohneLeads > 0
+      ? `${ohneLeads} Mitarbeiter ohne zugewiesene Leads werden mit aufgeführt.` : '';
   }
 
   function setOwner(id) {
@@ -722,13 +747,15 @@
     counter(document.getElementById('k-won'),    won);
     counter(document.getElementById('k-offers'), offers);
     counter(document.getElementById('k-hot'),    hot);
-    counter(document.getElementById('k-rate'),   rate, '%');
-
-    const rColor = quoteColor(rate);
-    document.getElementById('k-rate').style.color = rColor;
+    const rEl = document.getElementById('k-rate');
+    const rColor = decided > 0 ? quoteColor(rate) : C.grey;
+    if (decided > 0) counter(rEl, rate, '%'); else rEl.textContent = '\u2014';
+    rEl.style.color = rColor;
 
     document.getElementById('d-won').textContent  = `von ${total} Leads`;
-    document.getElementById('d-rate').textContent = `${won} von ${decided} entschieden`;
+    document.getElementById('d-rate').textContent = decided > 0
+      ? `${won} von ${decided} entschieden`
+      : (total > 0 ? 'noch nichts entschieden' : 'keine Leads zugewiesen');
     const oLabel = currentOwner === 'all'
       ? 'Alle Mitarbeiter'
       : (owners.find(o => o.id === currentOwner)?.name || currentOwner);
@@ -737,7 +764,7 @@
 
     /* Fortschrittsleisten */
     fillGlowBar('gb-total',  100, C.amber);
-    fillGlowBar('gb-rate',   rate, rColor);
+    fillGlowBar('gb-rate',   decided > 0 ? rate : 0, rColor);
     fillGlowBar('gb-won',    total > 0 ? Math.round(won / total * 100) : 0, C.green);
     fillGlowBar('gb-hot',    total > 0 ? Math.round(hot / total * 100) : 0, C.green);
     fillGlowBar('gb-offers', total > 0 ? Math.round(offers / total * 100) : 0, C.amberDark);
@@ -925,6 +952,8 @@
   function renderTeam() {
     const body = document.getElementById('teamBody');
     const stats = {};
+    /* Erst alle bekannten Mitarbeiter anlegen, damit auch die ohne Leads erscheinen */
+    owners.forEach(o => { stats[o.id] = { name: o.name, archived: o.archived, total: 0, won: 0, lost: 0, open: 0 }; });
     rawDeals.forEach(d => {
       const id = d.ownerId;
       if (!stats[id]) stats[id] = { name: d.ownerName, total: 0, won: 0, lost: 0, open: 0 };
@@ -934,7 +963,9 @@
       else                               stats[id].open++;
     });
 
-    const rows = Object.entries(stats).sort((a, b) => b[1].total - a[1].total);
+    const rows = Object.entries(stats)
+      .filter(([id, st]) => st.total > 0 || id !== '__none__')
+      .sort((a, b) => b[1].total - a[1].total || a[1].name.localeCompare(b[1].name, 'de'));
     body.innerHTML = rows.length ? rows.map(([id, st], idx) => {
       const dec = st.won + st.lost;
       const q   = dec > 0 ? Math.round(st.won / dec * 100) : null;
@@ -942,8 +973,8 @@
       const oc  = ownerColor(id);
       const active = id === currentOwner ? ' row-active' : '';
       return `<tr class="row-click${active}" onclick="setOwner('${id === currentOwner ? 'all' : id}')" title="Klicken zum Filtern">
-        <td><span class="lq-dot" style="background:${oc}"></span><b style="font-weight:600">${st.name}</b>${id === MY_OWNER_ID ? '<span class="team-me">DU</span>' : ''}</td>
-        <td>${st.total}</td>
+        <td><span class="lq-dot" style="background:${oc}"></span><b style="font-weight:600">${st.name}</b>${id === MY_OWNER_ID ? '<span class="team-me">DU</span>' : ''}${st.archived ? '<span class="team-me" style="background:var(--line-soft);color:var(--muted)">INAKTIV</span>' : ''}</td>
+        <td style="color:${st.total ? 'inherit' : C.greyLight}">${st.total}</td>
         <td style="color:${st.open ? C.amberDark : C.greyLight};font-weight:600">${st.open}</td>
         <td style="color:${st.won  ? C.green     : C.greyLight};font-weight:600">${st.won}</td>
         <td style="color:${st.lost ? C.red       : C.greyLight};font-weight:600">${st.lost}</td>
