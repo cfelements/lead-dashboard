@@ -186,7 +186,16 @@ module.exports = async function handler(req, res) {
       };
     });
 
-    const owners = Object.values(ownersSeen).sort((a, b) => b.count - a.count);
+    /* Aktive Owner ohne Deals ebenfalls aufnehmen - neue Mitarbeiter sollen
+       im Dashboard erscheinen, bevor ihnen der erste Lead zugewiesen wurde */
+    Object.entries(ownerMap).forEach(([id, o]) => {
+      if (o.archived || ownersSeen[id]) return;
+      ownersSeen[id] = { id, name: o.name, email: o.email, archived: false, count: 0 };
+    });
+
+    const owners = Object.values(ownersSeen).sort(
+      (a, b) => b.count - a.count || a.name.localeCompare(b.name, 'de')
+    );
 
     res.setHeader('Cache-Control', 's-maxage=60');
     res.json({ deals, owners, total: deals.length, ownerLookupOk: Object.keys(ownerMap).length > 0 });
